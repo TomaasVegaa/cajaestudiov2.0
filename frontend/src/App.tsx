@@ -221,6 +221,7 @@ export function App() {
       <main className="mx-auto max-w-[1440px] px-3 pt-3 sm:px-5">
         {tab === 'CAJA' && (
           <CajaView
+            user={user}
             hoy={config.hoy}
             clientes={clientes}
             preselectedClienteId={preselectedCajaCliente}

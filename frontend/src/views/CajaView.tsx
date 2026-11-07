@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
+  ArrowUpDown,
   Check,
   ChevronLeft,
   ChevronRight,
   Download,
   Link2,
   Lock,
+  LockOpen,
   Pencil,
   Plus,
   SlidersHorizontal,
@@ -31,10 +33,12 @@ import {
   MovimientosResponse,
   parseStrictAmount,
   uid,
+  User,
 } from '../lib/api';
 import { ClienteSelect } from '../components/ClienteSelect';
 
 interface Props {
+  user?: User | null;
   hoy: string;
   clientes: Cliente[];
   onClienteCreated: (c: Cliente) => void;
@@ -56,6 +60,7 @@ const TIPO_BADGE: Record<string, string> = {
 };
 
 export function CajaView({
+  user,
   hoy,
   clientes,
   onClienteCreated,
@@ -63,9 +68,12 @@ export function CajaView({
   preselectedClienteId,
   onConsumePreselected,
 }: Props) {
+  const isAdmin = user?.rol === 'admin';
   const initYm = hoy.slice(0, 7).split('-').map(Number);
   const [anio, setAnio] = useState(initYm[0] || 2026);
   const [mes, setMes] = useState(initYm[1] || 11);
+  const [ordenDesc, setOrdenDesc] = useState(true);
+  const [reabriendo, setReabriendo] = useState(false);
 
   const [data, setData] = useState<MovimientosResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -144,6 +152,29 @@ export function CajaView({
     };
   }, [clienteId, clientes, hoy]);
 
+  const changePeriod = (nextY: number, nextM: number) => {
+    setAnio(nextY);
+    setMes(nextM);
+    const targetYm = `${nextY}-${String(nextM).padStart(2, '0')}`;
+    if (!fecha.startsWith(targetYm)) {
+      setFecha(hoy.startsWith(targetYm) ? hoy : `${targetYm}-01`);
+      markDraftEdited();
+    }
+  };
+
+  const stepMonth = (delta: number) => {
+    let m = mes + delta;
+    let y = anio;
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    } else if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    changePeriod(y, m);
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
@@ -151,6 +182,7 @@ export function CajaView({
       const qs = new URLSearchParams({
         anio: String(anio),
         mes: String(mes),
+        orden: ordenDesc ? 'desc' : 'asc',
       });
       if (fCliente) qs.set('cliente_id', String(fCliente));
       if (fMedio) qs.set('medio', fMedio);
@@ -163,28 +195,27 @@ export function CajaView({
     } finally {
       setLoading(false);
     }
-  }, [anio, mes, fCliente, fMedio, fTipo, fQ]);
+  }, [anio, mes, ordenDesc, fCliente, fMedio, fTipo, fQ]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const stepMonth = (delta: number) => {
-    let m = mes + delta;
-    let y = anio;
-    if (m < 1) {
-      m = 12;
-      y -= 1;
-    } else if (m > 12) {
-      m = 1;
-      y += 1;
-    }
-    setAnio(y);
-    setMes(m);
-    const currentYm = `${y}-${String(m).padStart(2, '0')}`;
-    if (!fecha.startsWith(currentYm)) {
-      setFecha(hoy.startsWith(currentYm) ? hoy : `${currentYm}-01`);
-      markDraftEdited();
+  const handleReabrirMes = async () => {
+    if (reabriendo) return;
+    const confirmMsg = `¿Reabrir el mes de ${MESES_NOMBRES[mes]} ${anio} para permitir cargar o modificar movimientos?`;
+    if (!window.confirm(confirmMsg)) return;
+    setReabriendo(true);
+    setErr(null);
+    try {
+      await api('POST', 'periodos/reabrir', { anio, mes });
+      setFlashMsg(`Mes ${MESES_NOMBRES[mes]} ${anio} reabierto. Ya podés registrar movimientos.`);
+      setTimeout(() => setFlashMsg(null), 5000);
+      await load();
+    } catch (ex: any) {
+      setErr(ex.message || 'No se pudo reabrir el período');
+    } finally {
+      setReabriendo(false);
     }
   };
 
@@ -393,8 +424,16 @@ export function CajaView({
             type="date"
             value={fecha}
             onChange={(e) => {
-              setFecha(e.target.value);
+              const val = e.target.value;
+              setFecha(val);
               markDraftEdited();
+              if (val && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                const [fy, fm] = val.split('-').map(Number);
+                if (fy && fm && (fy !== anio || fm !== mes)) {
+                  setAnio(fy);
+                  setMes(fm);
+                }
+              }
             }}
             required
             className="num h-9 w-full rounded border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-900"
@@ -734,7 +773,7 @@ export function CajaView({
             <div className="flex items-center gap-1">
               <select
                 value={mes}
-                onChange={(e) => setMes(Number(e.target.value))}
+                onChange={(e) => changePeriod(anio, Number(e.target.value))}
                 className="h-8 rounded border border-slate-200 bg-slate-50 px-2 text-sm font-bold text-slate-900"
               >
                 {MESES_NOMBRES.slice(1).map((n, idx) => (
@@ -746,7 +785,7 @@ export function CajaView({
               <input
                 type="number"
                 value={anio}
-                onChange={(e) => setAnio(Number(e.target.value) || 2026)}
+                onChange={(e) => changePeriod(Number(e.target.value) || 2026, mes)}
                 className="num h-8 w-20 rounded border border-slate-200 bg-slate-50 px-2 text-sm font-bold text-slate-900"
               />
             </div>
@@ -761,9 +800,22 @@ export function CajaView({
           </div>
 
           {data?.cerrado ? (
-            <span className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
-              <Lock className="h-3 w-3" /> MES CERRADO
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                <Lock className="h-3 w-3" /> MES CERRADO
+              </span>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleReabrirMes}
+                  disabled={reabriendo}
+                  className="rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900 hover:bg-amber-200"
+                  title="Reabrir este período para permitir cargar"
+                >
+                  {reabriendo ? '...' : 'Reabrir'}
+                </button>
+              )}
+            </div>
           ) : (
             <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
               MES ABIERTO
@@ -835,8 +887,35 @@ export function CajaView({
         </div>
       )}
 
-      {/* Panel de Carga Rápida (Escritorio) */}
-      {!data?.cerrado && (
+      {/* Panel de Carga Rápida (Escritorio) o Banner de Mes Cerrado */}
+      {data?.cerrado ? (
+        <div className="no-print rounded border border-amber-300 bg-amber-50 p-3.5 text-amber-950 shadow-2xs">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <Lock className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+              <div>
+                <p className="text-xs font-bold">
+                  El período de {MESES_NOMBRES[mes]} {anio} está cerrado (modo solo lectura).
+                </p>
+                <p className="text-[11px] text-amber-800">
+                  Los registros de este período están protegidos. Para cargar o corregir movimientos en este mes, debe reabrirlo.
+                </p>
+              </div>
+            </div>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleReabrirMes}
+                disabled={reabriendo}
+                className="inline-flex items-center gap-1.5 rounded border border-amber-400 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100 shadow-xs transition"
+              >
+                <LockOpen className="h-3.5 w-3.5 text-amber-700" />
+                {reabriendo ? 'Reabriendo mes...' : 'Reabrir mes ahora'}
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
         <div className="no-print hidden rounded border border-slate-300 bg-white p-3 shadow-2xs md:block">
           {renderQuickForm(false)}
         </div>
@@ -908,6 +987,7 @@ export function CajaView({
               href={exportUrl('export/movimientos', {
                 anio,
                 mes,
+                orden: ordenDesc ? 'desc' : 'asc',
                 cliente_id: fCliente || undefined,
                 medio: fMedio || undefined,
                 tipo: fTipo || undefined,
@@ -962,7 +1042,18 @@ export function CajaView({
         <table className="ledger-table">
           <thead>
             <tr>
-              <th className="w-24 text-left">Fecha</th>
+              <th
+                className="w-36 cursor-pointer select-none text-left hover:text-slate-900"
+                onClick={() => setOrdenDesc(!ordenDesc)}
+                title="Haga clic para alternar el orden (más nuevo arriba / más viejo arriba)"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold">Fecha</span>
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 border border-slate-200">
+                    {ordenDesc ? '↓ Nuevo arriba' : '↑ Viejo arriba'}
+                  </span>
+                </div>
+              </th>
               <th className="w-32 text-left">Cód / Medio</th>
               <th className="text-left">Cliente / Cuenta</th>
               <th className="w-28 text-left">Tipo</th>

@@ -22,6 +22,7 @@ function movimientos_list(): array
     $cod = param('cod');
     $tipo = param('tipo');
     $medio = param('medio');
+    $orden = strtolower((string)param('orden', 'desc'));
     $texto = mb_strtoupper(trim((string)param('q', '')), 'UTF-8');
 
     $saldoCliente = $clienteId ? cents(saldo_cliente($clienteId, $desde, false)) : 0;
@@ -60,7 +61,8 @@ function movimientos_list(): array
         'desde' => $desde,
         'hasta' => $hasta,
         'cerrado' => periodo_cerrado($desde),
-        'movimientos' => $out,
+        'orden' => $orden,
+        'movimientos' => ($orden === 'asc') ? $out : array_reverse($out),
         'resumen' => [
             'entradas_mes' => from_cents($entradas),
             'salidas_mes' => from_cents($salidas),

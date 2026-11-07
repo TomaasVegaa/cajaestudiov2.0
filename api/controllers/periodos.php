@@ -5,7 +5,14 @@ const MESES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio
 function periodos_list(): array
 {
     require_user();
-    $inicio = config_get('fecha_inicio', date('Y-m-01'));
+    $fi = config_get('fecha_inicio', date('Y-01-01'));
+    $minMov = q("SELECT MIN(fecha) FROM movimientos WHERE tipo_valor <> 'APERTURA'")->fetchColumn();
+    $minPer = q("SELECT MIN(CONCAT(anio, '-', LPAD(mes, 2, '0'), '-01')) FROM periodos")->fetchColumn();
+    $startYear = date('Y-01-01');
+    $twelveMonthsAgo = date('Y-m-01', strtotime('-11 months'));
+    $candidates = array_filter([$fi, $minMov, $minPer, $startYear, $twelveMonthsAgo]);
+    $inicio = min($candidates);
+
     $ultimo = q('SELECT MAX(fecha) FROM movimientos')->fetchColumn() ?: date('Y-m-d');
     $fin = max(date('Y-m-01'), substr($ultimo, 0, 8) . '01');
     $estado = [];
