@@ -1,0 +1,26 @@
+# Dependencias de Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# Archivos de datos sensibles / planillas del estudio
+*.xlsx
+*.xls
+*.csv
+Libro1.xlsx
+
+# Configuraciones locales de base de datos
+api/config.local.php
+
+# Logs y temporales
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Entorno / IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

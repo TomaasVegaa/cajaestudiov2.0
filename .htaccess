@@ -1,0 +1,12 @@
+Options -Indexes
+DirectoryIndex index.html index.php
+
+# Bloquear fuentes, base de datos y documentos internos
+RedirectMatch 403 ^.*/(frontend|database|node_modules)(/|$)
+<FilesMatch "\.(md|sql|json|lock|log|xlsx|xls|csv)$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^manifest\.webmanifest$">
+    Require all granted
+</FilesMatch>
+

@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    color-scheme: light;
+  }
+
+  body {
+    background-color: #F8FAFC;
+    color: #0F172A;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  button,
+  [role='button'],
+  select,
+  summary {
+    cursor: pointer;
+  }
+
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  button:focus-visible {
+    outline: 2px solid #1E3A8A;
+    outline-offset: 0px;
+  }
+}
+
+.num {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.ledger-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.ledger-table th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #F1F5F9;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #CBD5E1;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.ledger-table td {
+  border-bottom: 1px solid #E2E8F0;
+  padding: 6px 10px;
+  vertical-align: middle;
+}
+
+.ledger-table tbody tr:hover td {
+  background-color: #F1F5F9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    font-size: 11.5px;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-full {
+    box-shadow: none !important;
+    border: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+  .ledger-table th {
+    position: static;
+    background: #F1F5F9 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
