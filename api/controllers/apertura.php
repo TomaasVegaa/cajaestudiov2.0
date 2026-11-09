@@ -23,6 +23,8 @@ function apertura_get(): array
         'fecha_inicio' => config_get('fecha_inicio'),
         'fecha_apertura' => $fa,
         'nombre_estudio' => config_get('nombre_estudio'),
+        'subtitulo_estudio' => config_get('subtitulo_estudio', ''),
+        'datos_contacto_estudio' => config_get('datos_contacto_estudio', ''),
         'efectivo' => $caja['EFECTIVO'],
         'banco' => $caja['BANCO'],
         'clientes' => $clientes,
@@ -50,7 +52,9 @@ function apertura_save(): array
     $b = body();
     $antes = apertura_get();
     db()->beginTransaction();
-    if (!empty($b['nombre_estudio'])) config_set('nombre_estudio', trim((string)$b['nombre_estudio']));
+    if (!empty($b['nombre_estudio'])) config_set('nombre_estudio', mb_substr(trim((string)$b['nombre_estudio']), 0, 120));
+    if (array_key_exists('subtitulo_estudio', $b)) config_set('subtitulo_estudio', mb_substr(trim((string)$b['subtitulo_estudio']), 0, 160));
+    if (array_key_exists('datos_contacto_estudio', $b)) config_set('datos_contacto_estudio', mb_substr(trim((string)$b['datos_contacto_estudio']), 0, 200));
     if (!empty($b['fecha_inicio'])) {
         $fi = valid_date($b['fecha_inicio']);
         if (substr($fi, 8, 2) !== '01') throw new HttpError('La fecha de inicio debe ser el dia 1 de un mes');

@@ -38,9 +38,11 @@ $routes = [
     ['GET', 'clientes/saldos', 'clientes_saldos'],
     ['PUT', 'clientes/(\d+)', 'clientes_update'],
     ['PATCH', 'clientes/(\d+)/nota', 'clientes_nota'],
+    ['PATCH', 'clientes/(\d+)/telefono', 'clientes_telefono'],
     ['GET', 'clientes/(\d+)/estado-cuenta', 'clientes_estado_cuenta'],
 
     ['GET', 'movimientos', 'movimientos_list'],
+    ['GET', 'movimientos/(\d+)/recibo', 'movimientos_recibo'],
     ['POST', 'movimientos/carga-rapida', 'movimientos_carga_rapida'],
     ['PUT', 'movimientos/(\d+)', 'movimientos_update'],
     ['DELETE', 'movimientos/(\d+)', 'movimientos_delete'],

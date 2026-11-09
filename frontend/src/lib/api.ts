@@ -8,7 +8,25 @@ export interface User {
 export interface AppConfig {
   fecha_inicio: string;
   nombre_estudio: string;
+  subtitulo_estudio?: string;
+  datos_contacto_estudio?: string;
   hoy: string;
+}
+
+export interface ReciboApiResponse {
+  cliente: {
+    id: number;
+    nombre: string;
+    cuit?: string | null;
+    telefono?: string | null;
+  };
+  movimientos_operacion: Movimiento[];
+  otros_mismo_dia: Movimiento[];
+  estudio: {
+    nombre_estudio: string;
+    subtitulo_estudio?: string;
+    datos_contacto_estudio?: string;
+  };
 }
 
 export interface Cliente {

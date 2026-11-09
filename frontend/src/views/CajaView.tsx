@@ -6,9 +6,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  FileText,
   Link2,
   Lock,
   LockOpen,
+  MessageCircle,
   Pencil,
   Plus,
   SlidersHorizontal,
@@ -18,6 +20,7 @@ import {
 import {
   api,
   ApiHttpError,
+  AppConfig,
   Cliente,
   COD_LABELS,
   CodConce,
@@ -36,12 +39,20 @@ import {
   User,
 } from '../lib/api';
 import { ClienteSelect } from '../components/ClienteSelect';
+import { ReciboModal, ReciboSeed } from '../components/ReciboModal';
+import {
+  buildReciboComputed,
+  downloadReciboPdf,
+  openReciboWhatsapp,
+} from '../lib/reciboPdf';
 
 interface Props {
   user?: User | null;
+  config?: AppConfig | null;
   hoy: string;
   clientes: Cliente[];
   onClienteCreated: (c: Cliente) => void;
+  onClientePhoneUpdated?: (clienteId: number, telefono: string | null) => void;
   onOpenCliente: (clienteId: number) => void;
   preselectedClienteId?: number | null;
   onConsumePreselected?: () => void;
@@ -61,9 +72,11 @@ const TIPO_BADGE: Record<string, string> = {
 
 export function CajaView({
   user,
+  config,
   hoy,
   clientes,
   onClienteCreated,
+  onClientePhoneUpdated,
   onOpenCliente,
   preselectedClienteId,
   onConsumePreselected,
@@ -74,6 +87,11 @@ export function CajaView({
   const [mes, setMes] = useState(initYm[1] || 11);
   const [ordenDesc, setOrdenDesc] = useState(true);
   const [reabriendo, setReabriendo] = useState(false);
+  const [reciboModalSeed, setReciboModalSeed] = useState<ReciboSeed | null>(null);
+  const [lastRecibo, setLastRecibo] = useState<{
+    cliente: Cliente;
+    movimientos: Movimiento[];
+  } | null>(null);
 
   const [data, setData] = useState<MovimientosResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -321,6 +339,18 @@ export function CajaView({
       if (res.saldo_cliente !== undefined) {
         setClienteSaldoHoy(res.saldo_cliente);
       }
+
+      const movsImpuestos = (res.movimientos || []).filter((m) => m.tipo_valor === 'IMPUESTOS');
+      const cliSeleccionado = clientes.find((c) => c.id === clienteId);
+      if (tipo === 'IMPUESTOS' && movsImpuestos.length > 0 && cliSeleccionado && !cliSeleccionado.es_interno) {
+        setLastRecibo({
+          cliente: cliSeleccionado,
+          movimientos: movsImpuestos,
+        });
+      } else {
+        setLastRecibo(null);
+      }
+
       const cliMsg =
         res.saldo_cliente !== undefined
           ? ` · Saldo cliente: ${fmtARS(res.saldo_cliente)} (${estadoSaldoLabel(res.saldo_cliente)})`
@@ -887,6 +917,71 @@ export function CajaView({
         </div>
       )}
 
+      {lastRecibo && (() => {
+        const liveCli = clientes.find((c) => c.id === lastRecibo.cliente.id) || lastRecibo.cliente;
+        const fastRecibo = buildReciboComputed({
+          cliente: liveCli,
+          movimientos: lastRecibo.movimientos,
+          estudio: {
+            nombre_estudio: config?.nombre_estudio || 'Estudio Contable',
+            subtitulo_estudio: config?.subtitulo_estudio || '',
+            datos_contacto_estudio: config?.datos_contacto_estudio || '',
+          },
+          operador: user?.nombre,
+        });
+        return (
+          <div className="no-print flex flex-wrap items-center justify-between gap-2 rounded border border-[#1E3A8A]/30 bg-blue-50/80 px-3 py-2 text-xs">
+            <div className="flex items-center gap-2 text-slate-900">
+              <FileText className="h-4 w-4 shrink-0 text-[#1E3A8A]" />
+              <span>
+                <strong>Recibo Nº {fastRecibo.numero}</strong> listo para{' '}
+                <strong>{liveCli.nombre}</strong>
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => downloadReciboPdf(fastRecibo)}
+                className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-100"
+              >
+                <Download className="h-3.5 w-3.5" /> Descargar PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  downloadReciboPdf(fastRecibo);
+                  openReciboWhatsapp(fastRecibo, liveCli.telefono);
+                }}
+                className="inline-flex items-center gap-1 rounded bg-[#15803D] px-2.5 py-1 text-xs font-bold text-white hover:bg-[#166534]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" /> PDF + WhatsApp
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setReciboModalSeed({
+                    movimientoId: lastRecibo.movimientos[0].id,
+                    cliente: liveCli,
+                    movimientosIniciales: lastRecibo.movimientos,
+                  })
+                }
+                className="rounded border border-blue-300 bg-white px-2 py-1 text-xs font-medium text-[#1E3A8A] hover:bg-blue-50"
+              >
+                Vista previa / Tel.
+              </button>
+              <button
+                type="button"
+                onClick={() => setLastRecibo(null)}
+                className="rounded p-1 text-slate-400 hover:bg-blue-100 hover:text-slate-700"
+                title="Ocultar aviso de recibo"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Panel de Carga Rápida (Escritorio) o Banner de Mes Cerrado */}
       {data?.cerrado ? (
         <div className="no-print rounded border border-amber-300 bg-amber-50 p-3.5 text-amber-950 shadow-2xs">
@@ -1062,7 +1157,7 @@ export function CajaView({
               <th className="w-32 text-right">Salidas</th>
               {fCliente && <th className="w-36 text-right">Saldo Cliente</th>}
               <th className="w-36 text-right">Saldo Caja Mes</th>
-              {!data?.cerrado && <th className="no-print w-20 text-center">Acción</th>}
+              <th className="no-print w-28 text-center">Acción</th>
             </tr>
           </thead>
           <tbody>
@@ -1261,37 +1356,48 @@ export function CajaView({
                   >
                     {m.saldo_caja === undefined ? '—' : fmtARS(m.saldo_caja)}
                   </td>
-                  {!data?.cerrado && (
-                    <td className="no-print whitespace-nowrap text-center">
-                      {isAutoMirror ? (
-                        <span
-                          title="Pase automático vinculado al movimiento superior. Edite o elimine el movimiento origen."
-                          className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
+                  <td className="no-print whitespace-nowrap text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      {m.tipo_valor === 'IMPUESTOS' && !m.es_interno && (
+                        <button
+                          type="button"
+                          onClick={() => setReciboModalSeed({ movimientoId: m.id })}
+                          className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50/70 px-1.5 py-0.5 text-[10px] font-semibold text-[#1E3A8A] hover:bg-blue-100"
+                          title="Descargar recibo PDF o enviar por WhatsApp"
                         >
-                          <Link2 className="h-3 w-3" /> Auto
-                        </span>
-                      ) : m.tipo_valor !== 'APERTURA' ? (
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => startEdit(m)}
-                            className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-800"
-                            title="Editar fila (o doble clic)"
+                          <FileText className="h-3 w-3" /> Recibo
+                        </button>
+                      )}
+                      {!data?.cerrado &&
+                        (isAutoMirror ? (
+                          <span
+                            title="Pase automático vinculado al movimiento superior. Edite o elimine el movimiento origen."
+                            className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
                           >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeRow(m)}
-                            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-[#DC2626]"
-                            title="Eliminar fila"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ) : null}
-                    </td>
-                  )}
+                            <Link2 className="h-3 w-3" /> Auto
+                          </span>
+                        ) : m.tipo_valor !== 'APERTURA' ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(m)}
+                              className="rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-800"
+                              title="Editar fila (o doble clic)"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeRow(m)}
+                              className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-[#DC2626]"
+                              title="Eliminar fila"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        ) : null)}
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -1340,17 +1446,28 @@ export function CajaView({
                 )}
               </div>
             </div>
-            <div className="mt-1.5 flex items-center justify-between border-t border-slate-100 pt-1.5 text-xs text-slate-700">
+            <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-1.5 text-xs text-slate-700">
               <span className="truncate">{m.detalle}</span>
-              {!data?.cerrado && m.tipo_valor !== 'APERTURA' && m.movimiento_padre_id === null && (
-                <button
-                  type="button"
-                  onClick={() => removeRow(m)}
-                  className="ml-2 shrink-0 rounded p-1 text-slate-400 hover:text-[#DC2626]"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
+              <div className="flex shrink-0 items-center gap-1.5">
+                {m.tipo_valor === 'IMPUESTOS' && !m.es_interno && (
+                  <button
+                    type="button"
+                    onClick={() => setReciboModalSeed({ movimientoId: m.id })}
+                    className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-[#1E3A8A]"
+                  >
+                    <FileText className="h-3.5 w-3.5" /> Recibo
+                  </button>
+                )}
+                {!data?.cerrado && m.tipo_valor !== 'APERTURA' && m.movimiento_padre_id === null && (
+                  <button
+                    type="button"
+                    onClick={() => removeRow(m)}
+                    className="rounded p-1 text-slate-400 hover:text-[#DC2626]"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -1389,6 +1506,16 @@ export function CajaView({
             {renderQuickForm(true)}
           </div>
         </div>
+      )}
+
+      {reciboModalSeed && (
+        <ReciboModal
+          seed={reciboModalSeed}
+          config={config || null}
+          operadorNombre={user?.nombre}
+          onClose={() => setReciboModalSeed(null)}
+          onClientePhoneUpdated={onClientePhoneUpdated}
+        />
       )}
     </div>
   );

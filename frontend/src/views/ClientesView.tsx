@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Copy,
   FileSpreadsheet,
+  FileText,
   Pencil,
   Plus,
   Printer,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import {
   api,
+  AppConfig,
   Cliente,
   ClienteSaldo,
   estadoSaldoLabel,
@@ -20,9 +22,13 @@ import {
   exportUrl,
   fmtARS,
   fmtDate,
+  User,
 } from '../lib/api';
+import { ReciboModal, ReciboSeed } from '../components/ReciboModal';
 
 interface Props {
+  user?: User | null;
+  config?: AppConfig | null;
   hoy: string;
   selectedId: number | null;
   onSelectId: (id: number | null) => void;
@@ -33,6 +39,8 @@ interface Props {
 type FiltroSaldo = 'TODOS' | 'ROJO' | 'FAVOR' | 'NOTA' | 'CERO';
 
 export function ClientesView({
+  user,
+  config,
   hoy,
   selectedId,
   onSelectId,
@@ -66,6 +74,7 @@ export function ClientesView({
   const [loadingEstado, setLoadingEstado] = useState(false);
   const [tabDet, setTabDet] = useState<'CTA_CTE' | 'HONORARIOS' | 'TODO'>('CTA_CTE');
   const [copied, setCopied] = useState(false);
+  const [reciboSeed, setReciboSeed] = useState<ReciboSeed | null>(null);
 
   const loadPadron = useCallback(async () => {
     setLoading(true);
@@ -451,6 +460,7 @@ export function ClientesView({
                 <th className="w-32 text-right">Entregó (+)</th>
                 <th className="w-32 text-right">Se Aplicó (-)</th>
                 <th className="w-40 text-right">Saldo Cliente</th>
+                <th className="no-print w-24 text-center">Recibo</th>
               </tr>
             </thead>
             <tbody>
@@ -469,18 +479,19 @@ export function ClientesView({
                   >
                     {fmtARS(estado.saldo_anterior)}
                   </td>
+                  <td className="no-print text-center text-xs text-slate-400">—</td>
                 </tr>
               )}
               {loadingEstado && (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-xs text-slate-500">
+                  <td colSpan={8} className="py-8 text-center text-xs text-slate-500">
                     Cargando extracto...
                   </td>
                 </tr>
               )}
               {!loadingEstado && movsVisibles.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-xs text-slate-500">
+                  <td colSpan={8} className="py-8 text-center text-xs text-slate-500">
                     Sin movimientos en este rango.
                   </td>
                 </tr>
@@ -514,6 +525,20 @@ export function ClientesView({
                       ? 'Honorario directo'
                       : fmtARS(m.saldo_cliente)}
                   </td>
+                  <td className="no-print whitespace-nowrap text-center">
+                    {m.tipo_valor === 'IMPUESTOS' ? (
+                      <button
+                        type="button"
+                        onClick={() => setReciboSeed({ movimientoId: m.id })}
+                        className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50/70 px-1.5 py-0.5 text-[10px] font-semibold text-[#1E3A8A] hover:bg-blue-100"
+                        title="Descargar recibo PDF o enviar por WhatsApp"
+                      >
+                        <FileText className="h-3 w-3" /> Recibo
+                      </button>
+                    ) : (
+                      <span className="text-xs text-slate-300">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -521,6 +546,20 @@ export function ClientesView({
         </div>
 
         {modalCliente && renderModalCliente()}
+        {reciboSeed && (
+          <ReciboModal
+            seed={reciboSeed}
+            config={config || null}
+            operadorNombre={user?.nombre}
+            onClose={() => setReciboSeed(null)}
+            onClientePhoneUpdated={(_cid, tel) => {
+              setEstado((prev) =>
+                prev ? { ...prev, cliente: { ...prev.cliente, telefono: tel } } : prev,
+              );
+              onClientesChanged();
+            }}
+          />
+        )}
       </div>
     );
   }

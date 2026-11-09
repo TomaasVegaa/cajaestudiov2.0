@@ -11,6 +11,8 @@ interface AperturaData {
   fecha_inicio: string;
   fecha_apertura: string;
   nombre_estudio: string;
+  subtitulo_estudio?: string;
+  datos_contacto_estudio?: string;
   efectivo: number;
   banco: number;
   clientes: { id: number; nombre: string; nota_revision?: string | null; saldo: number }[];
@@ -27,6 +29,8 @@ export function ConfigView({ user, onDataChanged }: Props) {
   // Apertura e importador Excel
   const [ap, setAp] = useState<AperturaData | null>(null);
   const [nombreEstudio, setNombreEstudio] = useState('');
+  const [subtituloEstudio, setSubtituloEstudio] = useState('');
+  const [contactoEstudio, setContactoEstudio] = useState('');
   const [fechaInicio, setFechaInicio] = useState('2026-11-01');
   const [efInicial, setEfInicial] = useState('');
   const [bcoInicial, setBcoInicial] = useState('');
@@ -62,6 +66,8 @@ export function ConfigView({ user, onDataChanged }: Props) {
     const res = await api<AperturaData>('GET', 'apertura');
     setAp(res);
     setNombreEstudio(res.nombre_estudio || 'Estudio Contable');
+    setSubtituloEstudio(res.subtitulo_estudio || '');
+    setContactoEstudio(res.datos_contacto_estudio || '');
     setFechaInicio(res.fecha_inicio || '2026-11-01');
     setEfInicial(res.efectivo ? String(res.efectivo) : '');
     setBcoInicial(res.banco ? String(res.banco) : '');
@@ -96,6 +102,8 @@ export function ConfigView({ user, onDataChanged }: Props) {
     try {
       await api('POST', 'apertura', {
         nombre_estudio: nombreEstudio,
+        subtitulo_estudio: subtituloEstudio,
+        datos_contacto_estudio: contactoEstudio,
         fecha_inicio: fechaInicio,
         efectivo: parseLocalAmount(efInicial),
         banco: parseLocalAmount(bcoInicial),
@@ -276,7 +284,7 @@ export function ConfigView({ user, onDataChanged }: Props) {
           >
             <div className="md:col-span-4">
               <label className="mb-0.5 block text-xs font-semibold text-slate-700">
-                Nombre del Estudio
+                Nombre del Estudio (Membrete Recibos)
               </label>
               <input
                 type="text"
@@ -286,7 +294,33 @@ export function ConfigView({ user, onDataChanged }: Props) {
                 className="h-9 w-full rounded border border-slate-300 px-2.5 text-sm"
               />
             </div>
-            <div className="md:col-span-2">
+            <div className="md:col-span-4">
+              <label className="mb-0.5 block text-xs font-semibold text-slate-700">
+                Subtítulo / Profesional en Recibos (opcional)
+              </label>
+              <input
+                type="text"
+                disabled={!isAdmin}
+                value={subtituloEstudio}
+                onChange={(e) => setSubtituloEstudio(e.target.value)}
+                placeholder="Ej: Asesoramiento Contable e Impositivo"
+                className="h-9 w-full rounded border border-slate-300 px-2.5 text-sm"
+              />
+            </div>
+            <div className="md:col-span-4">
+              <label className="mb-0.5 block text-xs font-semibold text-slate-700">
+                Dirección / Teléfono en Recibos (opcional)
+              </label>
+              <input
+                type="text"
+                disabled={!isAdmin}
+                value={contactoEstudio}
+                onChange={(e) => setContactoEstudio(e.target.value)}
+                placeholder="Ej: San Martín 123 · Tel: 381-..."
+                className="h-9 w-full rounded border border-slate-300 px-2.5 text-sm"
+              />
+            </div>
+            <div className="md:col-span-3">
               <label className="mb-0.5 block text-xs font-semibold text-slate-700">
                 Inicio Operativo (día 01)
               </label>
@@ -298,7 +332,7 @@ export function ConfigView({ user, onDataChanged }: Props) {
                 className="num h-9 w-full rounded border border-slate-300 px-2 text-xs"
               />
             </div>
-            <div className="md:col-span-2">
+            <div className="md:col-span-3">
               <label className="mb-0.5 block text-xs font-semibold text-slate-700">
                 Efectivo Inicial ($)
               </label>
@@ -311,7 +345,7 @@ export function ConfigView({ user, onDataChanged }: Props) {
                 className="num h-9 w-full rounded border border-slate-300 px-2 text-right text-sm"
               />
             </div>
-            <div className="md:col-span-2">
+            <div className="md:col-span-3">
               <label className="mb-0.5 block text-xs font-semibold text-slate-700">
                 Banco Inicial ($)
               </label>
@@ -325,13 +359,13 @@ export function ConfigView({ user, onDataChanged }: Props) {
               />
             </div>
             {isAdmin && (
-              <div className="md:col-span-2">
+              <div className="md:col-span-3">
                 <button
                   type="submit"
                   disabled={busy}
                   className="h-9 w-full rounded bg-[#0F172A] px-3 text-xs font-semibold text-white hover:bg-[#1E3A8A]"
                 >
-                  Guardar Base
+                  Guardar Base y Membrete
                 </button>
               </div>
             )}

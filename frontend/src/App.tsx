@@ -222,6 +222,7 @@ export function App() {
         {tab === 'CAJA' && (
           <CajaView
             user={user}
+            config={config}
             hoy={config.hoy}
             clientes={clientes}
             preselectedClienteId={preselectedCajaCliente}
@@ -229,6 +230,11 @@ export function App() {
             onClienteCreated={(nuevo) =>
               setClientes((prev) =>
                 [...prev, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)),
+              )
+            }
+            onClientePhoneUpdated={(cid, tel) =>
+              setClientes((prev) =>
+                prev.map((c) => (c.id === cid ? { ...c, telefono: tel } : c)),
               )
             }
             onOpenCliente={(id) => {
@@ -240,6 +246,8 @@ export function App() {
 
         {tab === 'CLIENTES' && (
           <ClientesView
+            user={user}
+            config={config}
             hoy={config.hoy}
             selectedId={selectedClienteId}
             onSelectId={setSelectedClienteId}

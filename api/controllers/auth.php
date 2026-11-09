@@ -36,6 +36,8 @@ function auth_me(): array
         'config' => $u ? [
             'fecha_inicio' => config_get('fecha_inicio'),
             'nombre_estudio' => config_get('nombre_estudio', 'Estudio Contable'),
+            'subtitulo_estudio' => config_get('subtitulo_estudio', ''),
+            'datos_contacto_estudio' => config_get('datos_contacto_estudio', ''),
             'hoy' => date('Y-m-d'),
         ] : null,
     ];

@@ -283,3 +283,51 @@ function movimientos_delete(int $id): array
     return ['ok' => true, 'eliminados' => 1 + count($hijos)];
 }
 
+/**
+ * Devuelve los datos puntuales de una operacion de IMPUESTOS para emitir su recibo PDF / WhatsApp
+ * sin exponer saldos anteriores de cuenta corriente.
+ */
+function movimientos_recibo(int $id): array
+{
+    require_user();
+    $m = q("SELECT m.*, c.nombre cliente, c.cuit, c.telefono, c.es_interno, u.nombre usuario
+            FROM movimientos m
+            JOIN clientes c ON c.id = m.cliente_id
+            LEFT JOIN usuarios u ON u.id = m.creado_por
+            WHERE m.id = ?", [$id])->fetch();
+    if (!$m) throw new HttpError('Movimiento inexistente', 404);
+    if ($m['es_interno'] || $m['tipo_valor'] !== 'IMPUESTOS') {
+        throw new HttpError('Los recibos solo se emiten para operaciones de Impuestos de clientes');
+    }
+
+    if (!empty($m['grupo'])) {
+        $opMovs = fetch_movs("m.grupo = ? AND m.cliente_id = ? AND m.tipo_valor = 'IMPUESTOS'", [$m['grupo'], (int)$m['cliente_id']]);
+    } else {
+        $opMovs = [mov_row($m)];
+    }
+
+    $opIds = array_map(fn($x) => $x['id'], $opMovs);
+    $placeholders = implode(',', array_fill(0, count($opIds), '?'));
+    $otrosParams = array_merge([(int)$m['cliente_id'], $m['fecha']], $opIds);
+    $otrosDia = fetch_movs(
+        "m.cliente_id = ? AND m.fecha = ? AND m.tipo_valor = 'IMPUESTOS' AND m.id NOT IN ($placeholders)",
+        $otrosParams
+    );
+
+    return [
+        'cliente' => [
+            'id' => (int)$m['cliente_id'],
+            'nombre' => $m['cliente'],
+            'cuit' => $m['cuit'],
+            'telefono' => $m['telefono'],
+        ],
+        'movimientos_operacion' => $opMovs,
+        'otros_mismo_dia' => $otrosDia,
+        'estudio' => [
+            'nombre_estudio' => config_get('nombre_estudio', 'Estudio Contable'),
+            'subtitulo_estudio' => config_get('subtitulo_estudio', ''),
+            'datos_contacto_estudio' => config_get('datos_contacto_estudio', ''),
+        ],
+    ];
+}
+

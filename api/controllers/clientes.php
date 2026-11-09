@@ -99,6 +99,18 @@ function clientes_nota(int $id): array
     return ['ok' => true];
 }
 
+function clientes_telefono(int $id): array
+{
+    require_user();
+    $c = q('SELECT id, telefono FROM clientes WHERE id = ?', [$id])->fetch();
+    if (!$c) throw new HttpError('Cliente inexistente', 404);
+    $tel = trim((string)(body()['telefono'] ?? ''));
+    $limpio = $tel === '' ? null : mb_substr($tel, 0, 50);
+    q('UPDATE clientes SET telefono = ? WHERE id = ?', [$limpio, $id]);
+    audit('EDITAR', 'clientes.telefono', $id, ['telefono' => $c['telefono']], ['telefono' => $limpio]);
+    return ['ok' => true, 'telefono' => $limpio];
+}
+
 function clientes_saldos(): array
 {
     require_user();
