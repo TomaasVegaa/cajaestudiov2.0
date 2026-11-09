@@ -525,3 +525,4 @@ function movimientos_facturar(int $id): array
         'factura' => factura_arca_row($inserted),
     ];
 }
+

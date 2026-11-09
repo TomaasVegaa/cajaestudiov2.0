@@ -830,3 +830,4 @@ function factura_arca_row(array $f): array
         'created_at' => $f['created_at'] ?? null,
     ];
 }
+

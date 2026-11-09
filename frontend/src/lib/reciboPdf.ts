@@ -1,4 +1,5 @@
 import { fmtARS, fmtDate, Movimiento } from './api';
+import { FIRMA_SELLO_IMAGE, getFirmaSelloJpgBytes } from './firmaSelloAsset';
 
 export interface ReciboEstudioInfo {
   nombre_estudio: string;
@@ -482,8 +483,8 @@ export function buildReciboPdfBytes(recibo: ReciboComputed): Uint8Array {
     calcY += pit.rowH;
   }
   calcY += 4.5;
-  const resumenH = recibo.tieneAmbos ? 23 : 16.5;
-  calcY += resumenH;
+  const blockH = Math.max(recibo.tieneAmbos ? 24 : 18, 30);
+  calcY += blockH;
   if (obsLines.length > 0) {
     calcY += 3.5 + 7 + obsLines.length * 3.6;
   }
@@ -661,10 +662,42 @@ export function buildReciboPdfBytes(recibo: ReciboComputed): Uint8Array {
 
   y += 4;
 
-  // 6. Cuadro de Resumen de ESTA Operación (sin saldos anteriores)
-  const sumW = 96;
+  // 6. Bloque inferior: Izquierda (Firma y Sello Oficial) | Derecha (Resumen de Operación)
+  const sumW = 94;
   const sumX = rightEdge - sumW;
-  drawBox(sumX, y, sumW, resumenH, '#F8FAFC', '#CBD5E1', 0.7);
+  const certX = MARGIN;
+  const certW = sumX - MARGIN - 3.5; // ~63.5 mm
+
+  // A. Tarjeta de Certificación (Firma + Sello Oficial de la Contadora)
+  drawBox(certX, y, certW, blockH, '#F8FAFC', '#CBD5E1', 0.7);
+  drawText('CERTIFICACIÓN PROFESIONAL', certX + 3.5, y + 4.2, 'F2', 6.5, '#1E3A8A');
+  drawLine(certX + 3, y + 5.5, certX + certW - 3, y + 5.5, '#E2E8F0', 0.4);
+
+  // Colocar imagen oficial de Firma + Sello centrada en la tarjeta
+  const imgW = 34;
+  const imgH = imgW / FIRMA_SELLO_IMAGE.aspectRatio; // ~20.64 mm
+  const imgX = certX + (certW - imgW) / 2;
+  const imgYTop = y + 5.8;
+
+  const imgXPt = fmtPt(pt(imgX));
+  const imgYPt = fmtPt(pt(H - imgYTop - imgH));
+  const imgWPt = fmtPt(pt(imgW));
+  const imgHPt = fmtPt(pt(imgH));
+
+  ops.push('q', `${imgWPt} 0 0 ${imgHPt} ${imgXPt} ${imgYPt} cm`, '/Im1 Do', 'Q');
+
+  drawText(
+    'Firma y Sello Digital · C.P.N. Lorena Jerez',
+    certX + certW / 2,
+    y + 28.5,
+    'F1',
+    5.6,
+    '#64748B',
+    'center',
+  );
+
+  // B. Tarjeta de Resumen (Derecha)
+  drawBox(sumX, y, sumW, blockH, '#F8FAFC', '#CBD5E1', 0.7);
 
   drawText('Total recibido del cliente:', sumX + 3.5, y + 5.2, 'F1', 8.2, '#334155');
   drawText(fmtARS(recibo.totalRecibido), rightEdge - 3.5, y + 5.3, 'F3', 9.2, '#15803D', 'right');
@@ -681,7 +714,7 @@ export function buildReciboPdfBytes(recibo: ReciboComputed): Uint8Array {
   );
 
   if (recibo.tieneAmbos) {
-    drawLine(sumX + 3, y + 13.6, rightEdge - 3, y + 13.6, '#CBD5E1', 0.6);
+    drawLine(sumX + 3, y + 14.2, rightEdge - 3, y + 14.2, '#CBD5E1', 0.6);
     const dif = recibo.diferenciaOperacion;
     let difLabel = 'Diferencia de la operación:';
     let difColor = '#0F172A';
@@ -695,20 +728,38 @@ export function buildReciboPdfBytes(recibo: ReciboComputed): Uint8Array {
       difLabel = 'Diferencia a cubrir de hoy:';
       difColor = '#DC2626';
     }
-    drawText(difLabel, sumX + 3.5, y + 18.8, 'F2', 8.2, '#0F172A');
-    drawText(fmtARS(dif), rightEdge - 3.5, y + 19, 'F3', 9.8, difColor, 'right');
+    drawText(difLabel, sumX + 3.5, y + 19.8, 'F2', 8.2, '#0F172A');
+    drawText(fmtARS(dif), rightEdge - 3.5, y + 20, 'F3', 9.8, difColor, 'right');
+    drawText(
+      '* Fondos en custodia aplicados al pago tributario.',
+      sumX + 3.5,
+      y + 26.5,
+      'F1',
+      6.4,
+      '#64748B',
+    );
   } else if (recibo.totalPagado === 0 && recibo.totalRecibido > 0) {
     drawText(
       'Fondos recibidos p/ pago de impuestos',
       sumX + 3.5,
-      y + 14.6,
+      y + 16,
       'F1',
-      7.2,
+      7.5,
       '#64748B',
     );
+    drawText(
+      '* Sujeto a liquidación y comprobantes VEP.',
+      sumX + 3.5,
+      y + 26.5,
+      'F1',
+      6.4,
+      '#64748B',
+    );
+  } else {
+    drawText('* Constancia de impuestos abonados.', sumX + 3.5, y + 26.5, 'F1', 6.4, '#64748B');
   }
 
-  y += resumenH;
+  y += blockH;
 
   // 7. Observaciones opcionales
   if (obsLines.length > 0) {
@@ -723,48 +774,104 @@ export function buildReciboPdfBytes(recibo: ReciboComputed): Uint8Array {
   }
 
   // 8. Pie del comprobante
-  const footerY = H - 10.5;
-  drawLine(MARGIN, footerY - 3, rightEdge, footerY - 3, '#E2E8F0', 0.5);
+  const footerY = H - 9.5;
+  drawLine(MARGIN, footerY - 2.5, rightEdge, footerY - 2.5, '#E2E8F0', 0.5);
   drawText(
     'Constancia de recepción de fondos y pago de impuestos por cuenta y orden del cliente.',
     MARGIN,
     footerY,
     'F1',
-    6.8,
+    6.6,
     '#64748B',
   );
   if (recibo.operador) {
-    drawText(`Atendió: ${recibo.operador}`, rightEdge, footerY, 'F1', 6.8, '#64748B', 'right');
+    drawText(`Atendió: ${recibo.operador}`, rightEdge, footerY, 'F1', 6.6, '#64748B', 'right');
   }
 
-  // Ensamblar objetos PDF 1.4 puros en ASCII exacto
+  // Ensamblar objetos PDF 1.4 puros con imagen de firma y sello /DCTDecode en binario exacto
   const streamContent = ops.join('\n');
-  const objects: string[] = [
-    `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj`,
-    `2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj`,
-    `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${fmtPt(pt(W))} ${fmtPt(pt(H))}] /Resources << /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R >> >> /Contents 7 0 R >>\nendobj`,
-    `4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj`,
-    `5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj`,
-    `6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold /Encoding /WinAnsiEncoding >>\nendobj`,
-    `7 0 obj\n<< /Length ${streamContent.length} >>\nstream\n${streamContent}\nendstream\nendobj`,
-  ];
+  const jpgBytes = getFirmaSelloJpgBytes();
 
-  let pdf = '%PDF-1.4\n';
-  const offsets: number[] = [0];
-  for (const obj of objects) {
-    offsets.push(pdf.length);
-    pdf += obj + '\n';
+  const obj1 = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
+  const obj2 = `2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n`;
+  const obj3 = `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${fmtPt(pt(W))} ${fmtPt(pt(H))}] /Resources << /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R >> /XObject << /Im1 7 0 R >> >> /Contents 8 0 R >>\nendobj\n`;
+  const obj4 = `4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n`;
+  const obj5 = `5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n`;
+  const obj6 = `6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold /Encoding /WinAnsiEncoding >>\nendobj\n`;
+  const obj7H = `7 0 obj\n<< /Type /XObject /Subtype /Image /Width ${FIRMA_SELLO_IMAGE.widthPx} /Height ${FIRMA_SELLO_IMAGE.heightPx} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpgBytes.length} >>\nstream\n`;
+  const obj7F = `\nendstream\nendobj\n`;
+  const obj8 = `8 0 obj\n<< /Length ${streamContent.length} >>\nstream\n${streamContent}\nendstream\nendobj\n`;
+
+  const enc = new TextEncoder();
+  const bHeader = enc.encode('%PDF-1.4\n');
+  const bObj1 = enc.encode(obj1);
+  const bObj2 = enc.encode(obj2);
+  const bObj3 = enc.encode(obj3);
+  const bObj4 = enc.encode(obj4);
+  const bObj5 = enc.encode(obj5);
+  const bObj6 = enc.encode(obj6);
+  const bObj7H = enc.encode(obj7H);
+  const bObj7F = enc.encode(obj7F);
+  const bObj8 = enc.encode(obj8);
+
+  const off1 = bHeader.length;
+  const off2 = off1 + bObj1.length;
+  const off3 = off2 + bObj2.length;
+  const off4 = off3 + bObj3.length;
+  const off5 = off4 + bObj4.length;
+  const off6 = off5 + bObj5.length;
+  const off7 = off6 + bObj6.length;
+  const off8 = off7 + bObj7H.length + jpgBytes.length + bObj7F.length;
+
+  let trailer = `xref\n0 9\n`;
+  trailer += `0000000000 65535 f \n`;
+  trailer += `${String(off1).padStart(10, '0')} 00000 n \n`;
+  trailer += `${String(off2).padStart(10, '0')} 00000 n \n`;
+  trailer += `${String(off3).padStart(10, '0')} 00000 n \n`;
+  trailer += `${String(off4).padStart(10, '0')} 00000 n \n`;
+  trailer += `${String(off5).padStart(10, '0')} 00000 n \n`;
+  trailer += `${String(off6).padStart(10, '0')} 00000 n \n`;
+  trailer += `${String(off7).padStart(10, '0')} 00000 n \n`;
+  trailer += `${String(off8).padStart(10, '0')} 00000 n \n`;
+
+  const xrefOffset = off8 + bObj8.length;
+  trailer += `trailer\n<< /Size 9 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  const bTrailer = enc.encode(trailer);
+
+  const totalLen =
+    bHeader.length +
+    bObj1.length +
+    bObj2.length +
+    bObj3.length +
+    bObj4.length +
+    bObj5.length +
+    bObj6.length +
+    bObj7H.length +
+    jpgBytes.length +
+    bObj7F.length +
+    bObj8.length +
+    bTrailer.length;
+
+  const result = new Uint8Array(totalLen);
+  let pos = 0;
+  for (const part of [
+    bHeader,
+    bObj1,
+    bObj2,
+    bObj3,
+    bObj4,
+    bObj5,
+    bObj6,
+    bObj7H,
+    jpgBytes,
+    bObj7F,
+    bObj8,
+    bTrailer,
+  ]) {
+    result.set(part, pos);
+    pos += part.length;
   }
-
-  const xrefOffset = pdf.length;
-  pdf += `xref\n0 ${objects.length + 1}\n`;
-  pdf += `0000000000 65535 f \n`;
-  for (let i = 1; i <= objects.length; i++) {
-    pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
-  }
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
-
-  return new TextEncoder().encode(pdf);
+  return result;
 }
 
 // ---------------- Nombre de archivo, Descarga, Share Móvil y WhatsApp ----------------

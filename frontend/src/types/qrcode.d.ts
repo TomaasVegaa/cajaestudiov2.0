@@ -21,3 +21,4 @@ declare module 'qrcode' {
     maskPattern: number;
   };
 }
+

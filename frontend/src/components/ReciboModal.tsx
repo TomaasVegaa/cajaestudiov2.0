@@ -24,6 +24,7 @@ import {
   ReciboClienteInfo,
   shareReciboPdfNative,
 } from '../lib/reciboPdf';
+import { FIRMA_SELLO_IMAGE, FIRMA_SELLO_INFO } from '../lib/firmaSelloAsset';
 
 export interface ReciboSeed {
   movimientoId: number;
@@ -383,47 +384,78 @@ export function ReciboModal({
                   </table>
                 </div>
 
-                {/* Resumen exclusivo de esta operación (sin saldos anteriores) */}
-                <div className="mt-2.5 flex justify-end">
-                  <div className="w-full max-w-xs space-y-1 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Total recibido del cliente:</span>
-                      <strong className="num text-[#15803D]">
-                        {fmtARS(recibo.totalRecibido)}
-                      </strong>
+                {/* Resumen de la Operación y Certificación Profesional */}
+                <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-12">
+                  {/* Tarjeta de Certificación Oficial de la Contadora (Firma + Sello) */}
+                  <div className="flex flex-col justify-between rounded border border-slate-300 bg-slate-50 p-2.5 sm:col-span-5">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#1E3A8A]">
+                        Certificación Profesional
+                      </span>
+                      <span className="text-[9px] font-semibold text-slate-500">
+                        {FIRMA_SELLO_INFO.matricula}
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Total impuestos abonados:</span>
-                      <strong
-                        className={`num ${
-                          recibo.totalPagado > 0 ? 'text-[#DC2626]' : 'text-slate-500'
-                        }`}
-                      >
-                        {fmtARS(recibo.totalPagado)}
-                      </strong>
+
+                    <div className="my-1.5 flex items-center justify-center py-0.5">
+                      <img
+                        src={FIRMA_SELLO_IMAGE.pngDataUrl}
+                        alt="Firma y Sello C.P.N. Lorena Jerez"
+                        className="h-16 w-auto object-contain"
+                      />
                     </div>
-                    {recibo.tieneAmbos && (
-                      <div className="flex justify-between border-t border-slate-300 pt-1 font-bold">
-                        <span className="text-slate-900">
-                          {Math.abs(recibo.diferenciaOperacion) < 0.005
-                            ? 'Resultado (cubierto exacto):'
-                            : recibo.diferenciaOperacion > 0
-                              ? 'Excedente de esta operación:'
-                              : 'Diferencia a cubrir de hoy:'}
-                        </span>
-                        <span
+
+                    <div className="border-t border-slate-200 pt-1 text-center text-[10px] text-slate-600">
+                      Firma y Sello Digital · <strong>{FIRMA_SELLO_INFO.nombre}</strong> (CUIT{' '}
+                      {FIRMA_SELLO_INFO.cuit})
+                    </div>
+                  </div>
+
+                  {/* Resumen exclusivo de esta operación (sin saldos anteriores) */}
+                  <div className="flex flex-col justify-between space-y-1 rounded border border-slate-300 bg-slate-50 p-2.5 text-xs sm:col-span-7">
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Total recibido del cliente:</span>
+                        <strong className="num text-[#15803D]">
+                          {fmtARS(recibo.totalRecibido)}
+                        </strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">Total impuestos abonados:</span>
+                        <strong
                           className={`num ${
-                            recibo.diferenciaOperacion < -0.005
-                              ? 'text-[#DC2626]'
-                              : recibo.diferenciaOperacion > 0.005
-                                ? 'text-[#15803D]'
-                                : 'text-slate-900'
+                            recibo.totalPagado > 0 ? 'text-[#DC2626]' : 'text-slate-500'
                           }`}
                         >
-                          {fmtARS(recibo.diferenciaOperacion)}
-                        </span>
+                          {fmtARS(recibo.totalPagado)}
+                        </strong>
                       </div>
-                    )}
+                      {recibo.tieneAmbos && (
+                        <div className="flex justify-between border-t border-slate-300 pt-1 font-bold">
+                          <span className="text-slate-900">
+                            {Math.abs(recibo.diferenciaOperacion) < 0.005
+                              ? 'Resultado (cubierto exacto):'
+                              : recibo.diferenciaOperacion > 0
+                                ? 'Excedente de esta operación:'
+                                : 'Diferencia a cubrir de hoy:'}
+                          </span>
+                          <span
+                            className={`num ${
+                              recibo.diferenciaOperacion < -0.005
+                                ? 'text-[#DC2626]'
+                                : recibo.diferenciaOperacion > 0.005
+                                  ? 'text-[#15803D]'
+                                  : 'text-slate-900'
+                            }`}
+                          >
+                            {fmtARS(recibo.diferenciaOperacion)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="border-t border-slate-200 pt-1 text-[10px] text-slate-500">
+                      * Fondos en custodia aplicados al pago tributario por cuenta y orden del cliente.
+                    </div>
                   </div>
                 </div>
               </div>
