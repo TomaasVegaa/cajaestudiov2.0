@@ -133,7 +133,15 @@ function ensure_arca_schema(bool $force = false): void
         db()->exec("ALTER TABLE clientes ADD COLUMN domicilio VARCHAR(255) NULL AFTER condicion_iva");
     }
 
-    db()->exec("INSERT IGNORE INTO arca_config (id) VALUES (1)");
+    db()->exec("INSERT IGNORE INTO arca_config (id, cuit, razon_social, domicilio_comercial, condicion_iva, punto_venta, ingresos_brutos) VALUES (
+        1,
+        '27255428492',
+        'LORENA JEREZ',
+        'Rondeau 660, San Miguel de Tucumán, Tucumán',
+        'IVA Responsable Inscripto',
+        8,
+        '27-25542849-2'
+    )");
     config_set('arca_schema_v1', '1');
 }
 
@@ -142,7 +150,25 @@ function arca_get_config_row(): array
     ensure_arca_schema();
     $row = q('SELECT * FROM arca_config WHERE id = 1')->fetch();
     if (!$row) {
-        db()->exec('INSERT IGNORE INTO arca_config (id) VALUES (1)');
+        db()->exec("INSERT IGNORE INTO arca_config (id, cuit, razon_social, domicilio_comercial, condicion_iva, punto_venta, ingresos_brutos) VALUES (
+            1,
+            '27255428492',
+            'LORENA JEREZ',
+            'Rondeau 660, San Miguel de Tucumán, Tucumán',
+            'IVA Responsable Inscripto',
+            8,
+            '27-25542849-2'
+        )");
+        $row = q('SELECT * FROM arca_config WHERE id = 1')->fetch();
+    } elseif (empty($row['cuit'])) {
+        db()->exec("UPDATE arca_config SET
+            cuit = '27255428492',
+            razon_social = COALESCE(NULLIF(razon_social, ''), 'LORENA JEREZ'),
+            domicilio_comercial = COALESCE(NULLIF(domicilio_comercial, ''), 'Rondeau 660, San Miguel de Tucumán, Tucumán'),
+            punto_venta = CASE WHEN punto_venta = 1 THEN 8 ELSE punto_venta END,
+            ingresos_brutos = COALESCE(NULLIF(ingresos_brutos, ''), '27-25542849-2'),
+            condicion_iva = COALESCE(NULLIF(condicion_iva, ''), 'IVA Responsable Inscripto')
+        WHERE id = 1");
         $row = q('SELECT * FROM arca_config WHERE id = 1')->fetch();
     }
     return $row ?: [];

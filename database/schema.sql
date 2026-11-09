@@ -193,4 +193,13 @@ INSERT IGNORE INTO clientes (nombre, es_interno) VALUES ('LORE', 1), ('ESTUDIO',
 INSERT IGNORE INTO configuracion (clave, valor) VALUES
     ('fecha_inicio', '2026-11-01'),
     ('nombre_estudio', 'Estudio Contable');
+INSERT IGNORE INTO arca_config (id, cuit, razon_social, domicilio_comercial, condicion_iva, punto_venta, ingresos_brutos) VALUES (
+    1,
+    '27255428492',
+    'LORENA JEREZ',
+    'Rondeau 660, San Miguel de Tucumán, Tucumán',
+    'IVA Responsable Inscripto',
+    8,
+    '27-25542849-2'
+);
 
