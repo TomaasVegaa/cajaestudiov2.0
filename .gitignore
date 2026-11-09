@@ -13,6 +13,14 @@ Libro1.xlsx
 # Configuraciones locales de base de datos
 api/config.local.php
 
+# Certificados y claves privadas (no exponer en repositorios publicos)
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.csr
+
 # Logs y temporales
 *.log
 npm-debug.log*
