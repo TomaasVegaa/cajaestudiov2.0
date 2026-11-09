@@ -29,10 +29,116 @@ export interface ReciboApiResponse {
   };
 }
 
+export type CondicionIvaKey = 'RI' | 'MONOTRIBUTO' | 'EXENTO' | 'CF';
+
+export interface FacturaArcaResumen {
+  id: number;
+  cbte_tipo: number;
+  cbte_letra: string;
+  punto_venta: number;
+  cbte_numero: number;
+  numero_formateado: string;
+  cae: string;
+  entorno: 'homologacion' | 'produccion';
+}
+
+export interface FacturaArcaCompleta extends FacturaArcaResumen {
+  movimiento_id: number;
+  cliente_id: number;
+  cuit_emisor: string;
+  razon_social_emisor: string;
+  domicilio_emisor: string;
+  iibb_emisor: string;
+  inicio_act_emisor: string | null;
+  cbte_nombre: string;
+  cbte_fecha: string;
+  concepto: number;
+  fch_serv_desde: string;
+  fch_serv_hasta: string;
+  fch_vto_pago: string;
+  doc_tipo: number;
+  doc_nro: string;
+  condicion_iva_receptor_id: number;
+  condicion_iva_receptor: string;
+  receptor_nombre: string;
+  receptor_domicilio: string | null;
+  descripcion: string;
+  alic_iva_id: number;
+  alic_iva_pct: number;
+  imp_neto: number;
+  imp_iva: number;
+  imp_total: number;
+  cae_vto: string;
+  qr_url: string;
+  observaciones_arca: string | null;
+  created_at?: string | null;
+}
+
+export interface ArcaCertInfo {
+  valido: boolean;
+  error?: string;
+  cn?: string;
+  serial_subject?: string;
+  cuit_certificado?: string;
+  emisor_ca?: string;
+  valido_desde?: string | null;
+  valido_hasta?: string | null;
+  vencido?: boolean;
+  dias_restantes?: number | null;
+  coincide_clave?: boolean | null;
+}
+
+export interface ArcaConfigData {
+  configurado: boolean;
+  entorno: 'homologacion' | 'produccion';
+  cuit: string;
+  razon_social: string;
+  domicilio_comercial: string;
+  condicion_iva: string;
+  punto_venta: number;
+  ingresos_brutos: string;
+  inicio_actividades: string | null;
+  tiene_cert: boolean;
+  tiene_key: boolean;
+  cert_info: ArcaCertInfo | null;
+}
+
+export interface FacturaPrepResponse {
+  emitida: boolean;
+  factura: FacturaArcaCompleta | null;
+  cliente: {
+    id: number;
+    nombre: string;
+    cuit?: string | null;
+    condicion_iva?: string | null;
+    domicilio?: string | null;
+    telefono?: string | null;
+  };
+  movimiento: Movimiento;
+  emisor: ArcaConfigData;
+  sugerido?: {
+    condicion_iva: CondicionIvaKey;
+    cbte_fecha: string;
+    fch_serv_desde: string;
+    fch_serv_hasta: string;
+    fch_vto_pago: string;
+    descripcion: string;
+    alic_iva: '21' | '10.5' | '27' | '0';
+    imp_total: number;
+  };
+  proximos_numeros?: {
+    factura_a: number;
+    factura_b: number;
+  } | null;
+  aviso_ws?: string | null;
+}
+
 export interface Cliente {
   id: number;
   nombre: string;
   cuit?: string | null;
+  condicion_iva?: CondicionIvaKey | null;
+  domicilio?: string | null;
   telefono?: string | null;
   es_interno: boolean;
   nota_revision?: string | null;
@@ -78,6 +184,7 @@ export interface Movimiento {
   creado_por: string | null;
   saldo_caja?: number;
   saldo_cliente?: number | null;
+  factura_arca?: FacturaArcaResumen | null;
 }
 
 export interface MovimientosResponse {

@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Pencil,
   Plus,
+  ShieldCheck,
   SlidersHorizontal,
   Trash2,
   X,
@@ -39,6 +40,7 @@ import {
   User,
 } from '../lib/api';
 import { ClienteSelect } from '../components/ClienteSelect';
+import { FacturaArcaModal } from '../components/FacturaArcaModal';
 import { ReciboModal, ReciboSeed } from '../components/ReciboModal';
 import {
   buildReciboComputed,
@@ -53,6 +55,8 @@ interface Props {
   clientes: Cliente[];
   onClienteCreated: (c: Cliente) => void;
   onClientePhoneUpdated?: (clienteId: number, telefono: string | null) => void;
+  onClientesChanged?: () => void;
+  onGoToConfigArca?: () => void;
   onOpenCliente: (clienteId: number) => void;
   preselectedClienteId?: number | null;
   onConsumePreselected?: () => void;
@@ -77,6 +81,8 @@ export function CajaView({
   clientes,
   onClienteCreated,
   onClientePhoneUpdated,
+  onClientesChanged,
+  onGoToConfigArca,
   onOpenCliente,
   preselectedClienteId,
   onConsumePreselected,
@@ -88,9 +94,14 @@ export function CajaView({
   const [ordenDesc, setOrdenDesc] = useState(true);
   const [reabriendo, setReabriendo] = useState(false);
   const [reciboModalSeed, setReciboModalSeed] = useState<ReciboSeed | null>(null);
+  const [facturaModalMovId, setFacturaModalMovId] = useState<number | null>(null);
   const [lastRecibo, setLastRecibo] = useState<{
     cliente: Cliente;
     movimientos: Movimiento[];
+  } | null>(null);
+  const [lastHonorarioArca, setLastHonorarioArca] = useState<{
+    cliente: Cliente;
+    movimiento: Movimiento;
   } | null>(null);
 
   const [data, setData] = useState<MovimientosResponse | null>(null);
@@ -341,14 +352,25 @@ export function CajaView({
       }
 
       const movsImpuestos = (res.movimientos || []).filter((m) => m.tipo_valor === 'IMPUESTOS');
+      const movHonBanco = (res.movimientos || []).find(
+        (m) => m.tipo_valor === 'HONORARIOS' && m.medio === 'BANCO' && m.entrada > 0,
+      );
       const cliSeleccionado = clientes.find((c) => c.id === clienteId);
       if (tipo === 'IMPUESTOS' && movsImpuestos.length > 0 && cliSeleccionado && !cliSeleccionado.es_interno) {
         setLastRecibo({
           cliente: cliSeleccionado,
           movimientos: movsImpuestos,
         });
+        setLastHonorarioArca(null);
+      } else if (tipo === 'HONORARIOS' && movHonBanco && cliSeleccionado && !cliSeleccionado.es_interno) {
+        setLastRecibo(null);
+        setLastHonorarioArca({
+          cliente: cliSeleccionado,
+          movimiento: movHonBanco,
+        });
       } else {
         setLastRecibo(null);
+        setLastHonorarioArca(null);
       }
 
       const cliMsg =
@@ -982,6 +1004,38 @@ export function CajaView({
         );
       })()}
 
+      {lastHonorarioArca && (
+        <div className="no-print flex flex-wrap items-center justify-between gap-2 rounded border border-emerald-300 bg-emerald-50/80 px-3 py-2 text-xs">
+          <div className="flex items-center gap-2 text-slate-900">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-[#15803D]" />
+            <span>
+              Honorarios por Transferencia (<strong>{fmtARS(lastHonorarioArca.movimiento.entrada)}</strong>) de{' '}
+              <strong>{lastHonorarioArca.cliente.nombre}</strong>. ¿Desea emitir Factura Electrónica ARCA?
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setFacturaModalMovId(lastHonorarioArca.movimiento.id);
+                setLastHonorarioArca(null);
+              }}
+              className="inline-flex items-center gap-1 rounded bg-[#0F172A] px-3 py-1 text-xs font-bold text-white hover:bg-[#1E3A8A]"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> Facturar en ARCA
+            </button>
+            <button
+              type="button"
+              onClick={() => setLastHonorarioArca(null)}
+              className="rounded p-1 text-slate-400 hover:bg-emerald-100 hover:text-slate-700"
+              title="No facturar ahora"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Panel de Carga Rápida (Escritorio) o Banner de Mes Cerrado */}
       {data?.cerrado ? (
         <div className="no-print rounded border border-amber-300 bg-amber-50 p-3.5 text-amber-950 shadow-2xs">
@@ -1157,7 +1211,7 @@ export function CajaView({
               <th className="w-32 text-right">Salidas</th>
               {fCliente && <th className="w-36 text-right">Saldo Cliente</th>}
               <th className="w-36 text-right">Saldo Caja Mes</th>
-              <th className="no-print w-28 text-center">Acción</th>
+              <th className="no-print w-36 text-center">Acción</th>
             </tr>
           </thead>
           <tbody>
@@ -1327,6 +1381,20 @@ export function CajaView({
                         desde saldo
                       </span>
                     )}
+                    {m.factura_arca && (
+                      <button
+                        type="button"
+                        onClick={() => setFacturaModalMovId(m.id)}
+                        className={`num ml-1.5 inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-bold hover:underline ${
+                          m.factura_arca.entorno === 'produccion'
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                            : 'border-amber-300 bg-amber-50 text-amber-900'
+                        }`}
+                        title={`CAE: ${m.factura_arca.cae} — Clic para abrir PDF / WhatsApp`}
+                      >
+                        FC {m.factura_arca.cbte_letra} {m.factura_arca.numero_formateado}
+                      </button>
+                    )}
                   </td>
                   <td className="num whitespace-nowrap text-right text-xs font-semibold text-[#15803D]">
                     {m.entrada > 0 ? fmtARS(m.entrada) : '—'}
@@ -1368,6 +1436,30 @@ export function CajaView({
                           <FileText className="h-3 w-3" /> Recibo
                         </button>
                       )}
+                      {m.factura_arca ? (
+                        <button
+                          type="button"
+                          onClick={() => setFacturaModalMovId(m.id)}
+                          className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-[#15803D] hover:bg-emerald-100"
+                          title="Descargar Factura Electrónica ARCA (PDF) o enviar por WhatsApp"
+                        >
+                          <ShieldCheck className="h-3 w-3" /> Factura
+                        </button>
+                      ) : (
+                        m.tipo_valor === 'HONORARIOS' &&
+                        m.medio === 'BANCO' &&
+                        m.entrada > 0 &&
+                        !m.es_interno && (
+                          <button
+                            type="button"
+                            onClick={() => setFacturaModalMovId(m.id)}
+                            className="inline-flex items-center gap-1 rounded bg-[#0F172A] px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-[#1E3A8A]"
+                            title="Emitir Factura Electrónica en ARCA para esta transferencia"
+                          >
+                            <ShieldCheck className="h-3 w-3 text-emerald-400" /> Facturar ARCA
+                          </button>
+                        )
+                      )}
                       {!data?.cerrado &&
                         (isAutoMirror ? (
                           <span
@@ -1386,14 +1478,16 @@ export function CajaView({
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => removeRow(m)}
-                              className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-[#DC2626]"
-                              title="Eliminar fila"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            {!m.factura_arca && (
+                              <button
+                                type="button"
+                                onClick={() => removeRow(m)}
+                                className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-[#DC2626]"
+                                title="Eliminar fila"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </>
                         ) : null)}
                     </div>
@@ -1435,6 +1529,11 @@ export function CajaView({
                   >
                     {m.tipo_valor}
                   </span>
+                  {m.factura_arca && (
+                    <span className="num rounded border border-emerald-300 bg-emerald-50 px-1 py-0.2 text-[10px] font-bold text-[#15803D]">
+                      FC {m.factura_arca.cbte_letra} {m.factura_arca.numero_formateado}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="text-right">
@@ -1458,15 +1557,40 @@ export function CajaView({
                     <FileText className="h-3.5 w-3.5" /> Recibo
                   </button>
                 )}
-                {!data?.cerrado && m.tipo_valor !== 'APERTURA' && m.movimiento_padre_id === null && (
+                {m.factura_arca ? (
                   <button
                     type="button"
-                    onClick={() => removeRow(m)}
-                    className="rounded p-1 text-slate-400 hover:text-[#DC2626]"
+                    onClick={() => setFacturaModalMovId(m.id)}
+                    className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-[#15803D]"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <ShieldCheck className="h-3.5 w-3.5" /> Factura
                   </button>
+                ) : (
+                  m.tipo_valor === 'HONORARIOS' &&
+                  m.medio === 'BANCO' &&
+                  m.entrada > 0 &&
+                  !m.es_interno && (
+                    <button
+                      type="button"
+                      onClick={() => setFacturaModalMovId(m.id)}
+                      className="inline-flex items-center gap-1 rounded bg-[#0F172A] px-2 py-1 text-[11px] font-semibold text-white"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> Facturar ARCA
+                    </button>
+                  )
                 )}
+                {!data?.cerrado &&
+                  m.tipo_valor !== 'APERTURA' &&
+                  m.movimiento_padre_id === null &&
+                  !m.factura_arca && (
+                    <button
+                      type="button"
+                      onClick={() => removeRow(m)}
+                      className="rounded p-1 text-slate-400 hover:text-[#DC2626]"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
               </div>
             </div>
           </div>
@@ -1515,6 +1639,27 @@ export function CajaView({
           operadorNombre={user?.nombre}
           onClose={() => setReciboModalSeed(null)}
           onClientePhoneUpdated={onClientePhoneUpdated}
+        />
+      )}
+
+      {facturaModalMovId !== null && (
+        <FacturaArcaModal
+          movimientoId={facturaModalMovId}
+          onClose={() => setFacturaModalMovId(null)}
+          onFacturaEmitida={() => {
+            void load();
+          }}
+          onClienteUpdated={() => {
+            onClientesChanged?.();
+          }}
+          onGoToConfigArca={
+            onGoToConfigArca
+              ? () => {
+                  setFacturaModalMovId(null);
+                  onGoToConfigArca();
+                }
+              : undefined
+          }
         />
       )}
     </div>

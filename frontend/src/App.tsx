@@ -3,7 +3,7 @@ import { BookOpen, Lock, LogOut, Settings, Users } from 'lucide-react';
 import { api, AppConfig, Cliente, User } from './lib/api';
 import { CajaView } from './views/CajaView';
 import { ClientesView } from './views/ClientesView';
-import { ConfigView } from './views/ConfigView';
+import { ConfigSubTab, ConfigView } from './views/ConfigView';
 
 type NavTab = 'CAJA' | 'CLIENTES' | 'CONFIG';
 
@@ -15,6 +15,7 @@ export function App() {
   const [sessionExpired, setSessionExpired] = useState(false);
 
   const [tab, setTab] = useState<NavTab>('CAJA');
+  const [configSubTab, setConfigSubTab] = useState<ConfigSubTab>('PERIODOS');
   const [selectedClienteId, setSelectedClienteId] = useState<number | null>(null);
   const [preselectedCajaCliente, setPreselectedCajaCliente] = useState<number | null>(null);
 
@@ -161,8 +162,13 @@ export function App() {
   const navItems: { id: NavTab; label: string; icon: React.ReactNode }[] = [
     { id: 'CAJA', label: 'Caja Diaria', icon: <BookOpen className="h-4 w-4" /> },
     { id: 'CLIENTES', label: 'Clientes y Saldos', icon: <Users className="h-4 w-4" /> },
-    { id: 'CONFIG', label: 'Períodos y Apertura', icon: <Settings className="h-4 w-4" /> },
+    { id: 'CONFIG', label: 'Configuración y ARCA', icon: <Settings className="h-4 w-4" /> },
   ];
+
+  const openConfigArca = () => {
+    setConfigSubTab('ARCA');
+    setTab('CONFIG');
+  };
 
   return (
     <div className="min-h-screen pb-16 md:pb-6">
@@ -237,6 +243,8 @@ export function App() {
                 prev.map((c) => (c.id === cid ? { ...c, telefono: tel } : c)),
               )
             }
+            onClientesChanged={loadClientes}
+            onGoToConfigArca={openConfigArca}
             onOpenCliente={(id) => {
               setSelectedClienteId(id);
               setTab('CLIENTES');
@@ -252,6 +260,7 @@ export function App() {
             selectedId={selectedClienteId}
             onSelectId={setSelectedClienteId}
             onClientesChanged={loadClientes}
+            onGoToConfigArca={openConfigArca}
             onCargarParaCliente={(id) => {
               setPreselectedCajaCliente(id);
               setTab('CAJA');
@@ -262,6 +271,7 @@ export function App() {
         {tab === 'CONFIG' && (
           <ConfigView
             user={user}
+            initialTab={configSubTab}
             onDataChanged={() => {
               refreshSession();
             }}

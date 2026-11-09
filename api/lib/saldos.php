@@ -75,6 +75,23 @@ function teorico(string $fecha): array
 
 function mov_row(array $r): array
 {
+    $factura = null;
+    if (!empty($r['fa_id'])) {
+        $cbteTipo = (int)$r['fa_cbte_tipo'];
+        $ptoVta = (int)$r['fa_punto_venta'];
+        $cbteNro = (int)$r['fa_cbte_numero'];
+        $factura = [
+            'id' => (int)$r['fa_id'],
+            'cbte_tipo' => $cbteTipo,
+            'cbte_letra' => arca_cbte_letra($cbteTipo),
+            'punto_venta' => $ptoVta,
+            'cbte_numero' => $cbteNro,
+            'numero_formateado' => arca_format_numero($ptoVta, $cbteNro),
+            'cae' => $r['fa_cae'],
+            'entorno' => $r['fa_entorno'],
+        ];
+    }
+
     return [
         'id' => (int)$r['id'],
         'fecha' => $r['fecha'],
@@ -92,6 +109,7 @@ function mov_row(array $r): array
         'movimiento_padre_id' => $r['movimiento_padre_id'] ? (int)$r['movimiento_padre_id'] : null,
         'grupo' => $r['grupo'],
         'creado_por' => $r['usuario'] ?? null,
+        'factura_arca' => $factura,
     ];
 }
 

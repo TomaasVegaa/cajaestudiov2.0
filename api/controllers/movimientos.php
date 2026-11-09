@@ -11,10 +11,14 @@ function movimientos_list(): array
     $desde = sprintf('%04d-%02d-01', $anio, $mes);
     $hasta = date('Y-m-t', strtotime($desde));
 
-    $rows = q("SELECT m.*, c.nombre cliente, c.es_interno, u.nombre usuario
+    ensure_arca_schema();
+    $rows = q("SELECT m.*, c.nombre cliente, c.es_interno, u.nombre usuario,
+                      fa.id fa_id, fa.cbte_tipo fa_cbte_tipo, fa.punto_venta fa_punto_venta,
+                      fa.cbte_numero fa_cbte_numero, fa.cae fa_cae, fa.entorno fa_entorno
                FROM movimientos m
                JOIN clientes c ON c.id = m.cliente_id
                LEFT JOIN usuarios u ON u.id = m.creado_por
+               LEFT JOIN facturas_arca fa ON fa.movimiento_id = m.id
                WHERE m.fecha BETWEEN ? AND ?
                ORDER BY m.fecha, m.id", [$desde, $hasta])->fetchAll();
 
@@ -92,8 +96,14 @@ function insert_mov(array $d): int
 
 function fetch_movs(string $where, array $params): array
 {
-    $rows = q("SELECT m.*, c.nombre cliente, c.es_interno, u.nombre usuario FROM movimientos m
-               JOIN clientes c ON c.id = m.cliente_id LEFT JOIN usuarios u ON u.id = m.creado_por
+    ensure_arca_schema();
+    $rows = q("SELECT m.*, c.nombre cliente, c.es_interno, u.nombre usuario,
+                      fa.id fa_id, fa.cbte_tipo fa_cbte_tipo, fa.punto_venta fa_punto_venta,
+                      fa.cbte_numero fa_cbte_numero, fa.cae fa_cae, fa.entorno fa_entorno
+               FROM movimientos m
+               JOIN clientes c ON c.id = m.cliente_id
+               LEFT JOIN usuarios u ON u.id = m.creado_por
+               LEFT JOIN facturas_arca fa ON fa.movimiento_id = m.id
                WHERE $where ORDER BY m.id", $params)->fetchAll();
     return array_map('mov_row', $rows);
 }
@@ -246,6 +256,17 @@ function movimientos_update(int $id): array
         if ($m['afecta_cliente'] && $cli['es_interno']) throw new HttpError('Este movimiento debe imputarse a un cliente, no a una cuenta interna');
     }
 
+    ensure_arca_schema();
+    $fac = q('SELECT cbte_tipo, punto_venta, cbte_numero FROM facturas_arca WHERE movimiento_id = ?', [$id])->fetch();
+    if ($fac && ($entrada != (float)$m['entrada'] || $salida != (float)$m['salida'] || $medio !== $m['medio'] || $clienteId !== (int)$m['cliente_id'])) {
+        throw new HttpError(
+            'Este cobro ya tiene emitida la ' . arca_cbte_nombre((int)$fac['cbte_tipo']) . ' '
+            . arca_format_numero((int)$fac['punto_venta'], (int)$fac['cbte_numero'])
+            . ' en ARCA; no se puede alterar su importe, medio ni cliente.',
+            409
+        );
+    }
+
     db()->beginTransaction();
     ensure_periodo($fecha);
     q('UPDATE movimientos SET fecha = ?, cod_conce = ?, medio = ?, cliente_id = ?, detalle = ?, entrada = ?, salida = ? WHERE id = ?',
@@ -274,6 +295,17 @@ function movimientos_delete(int $id): array
     if (!$m) throw new HttpError('Movimiento inexistente', 404);
     if ($m['tipo_valor'] === 'APERTURA') throw new HttpError('Los saldos de apertura se editan desde Configuracion > Apertura');
     assert_abierto($m['fecha']);
+    ensure_arca_schema();
+    $fac = q('SELECT cbte_tipo, punto_venta, cbte_numero FROM facturas_arca WHERE movimiento_id = ?', [$id])->fetch();
+    if ($fac) {
+        throw new HttpError(
+            'No se puede eliminar este movimiento porque ya tiene emitida la '
+            . arca_cbte_nombre((int)$fac['cbte_tipo']) . ' '
+            . arca_format_numero((int)$fac['punto_venta'], (int)$fac['cbte_numero'])
+            . ' con CAE en ARCA.',
+            409
+        );
+    }
     $hijos = q('SELECT * FROM movimientos WHERE movimiento_padre_id = ?', [$id])->fetchAll();
     foreach ($hijos as $h) assert_abierto($h['fecha']);
     db()->beginTransaction();

@@ -9,6 +9,7 @@ import {
   Printer,
   Search,
   Share2,
+  ShieldCheck,
   UserPlus,
   X,
 } from 'lucide-react';
@@ -17,6 +18,7 @@ import {
   AppConfig,
   Cliente,
   ClienteSaldo,
+  CondicionIvaKey,
   estadoSaldoLabel,
   EstadoCuentaResponse,
   exportUrl,
@@ -24,6 +26,7 @@ import {
   fmtDate,
   User,
 } from '../lib/api';
+import { FacturaArcaModal } from '../components/FacturaArcaModal';
 import { ReciboModal, ReciboSeed } from '../components/ReciboModal';
 
 interface Props {
@@ -34,9 +37,17 @@ interface Props {
   onSelectId: (id: number | null) => void;
   onCargarParaCliente: (clienteId: number) => void;
   onClientesChanged: () => void;
+  onGoToConfigArca?: () => void;
 }
 
 type FiltroSaldo = 'TODOS' | 'ROJO' | 'FAVOR' | 'NOTA' | 'CERO';
+
+const COND_IVA_SHORT: Record<CondicionIvaKey, string> = {
+  RI: 'Resp. Inscripto (FC A)',
+  MONOTRIBUTO: 'Monotributo (FC A)',
+  EXENTO: 'IVA Exento (FC B)',
+  CF: 'Consumidor Final (FC B)',
+};
 
 export function ClientesView({
   user,
@@ -46,6 +57,7 @@ export function ClientesView({
   onSelectId,
   onCargarParaCliente,
   onClientesChanged,
+  onGoToConfigArca,
 }: Props) {
   // Directorio
   const [fechaCorte, setFechaCorte] = useState(hoy);
@@ -62,6 +74,8 @@ export function ClientesView({
     id?: number;
     nombre: string;
     cuit: string;
+    condicion_iva: '' | CondicionIvaKey;
+    domicilio: string;
     telefono: string;
     nota_revision: string;
     aliases: string;
@@ -75,6 +89,7 @@ export function ClientesView({
   const [tabDet, setTabDet] = useState<'CTA_CTE' | 'HONORARIOS' | 'TODO'>('CTA_CTE');
   const [copied, setCopied] = useState(false);
   const [reciboSeed, setReciboSeed] = useState<ReciboSeed | null>(null);
+  const [facturaMovId, setFacturaMovId] = useState<number | null>(null);
 
   const loadPadron = useCallback(async () => {
     setLoading(true);
@@ -131,6 +146,8 @@ export function ClientesView({
     const payload = {
       nombre: modalCliente.nombre,
       cuit: modalCliente.cuit || null,
+      condicion_iva: modalCliente.condicion_iva || null,
+      domicilio: modalCliente.domicilio || null,
       telefono: modalCliente.telefono || null,
       nota_revision: modalCliente.nota_revision || null,
       aliases: modalCliente.aliases
@@ -268,13 +285,15 @@ export function ClientesView({
                         id: estado.cliente.id,
                         nombre: estado.cliente.nombre,
                         cuit: estado.cliente.cuit || '',
+                        condicion_iva: estado.cliente.condicion_iva || '',
+                        domicilio: estado.cliente.domicilio || '',
                         telefono: estado.cliente.telefono || '',
                         nota_revision: estado.cliente.nota_revision || '',
                         aliases: (estado.cliente.aliases || []).join(', '),
                       })
                     }
                     className="no-print rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-800"
-                    title="Editar datos y alias del cliente"
+                    title="Editar datos fiscales, teléfono y alias del cliente"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -286,6 +305,11 @@ export function ClientesView({
                   </span>
                   <span>· Emitido: {fmtDate(hoy)}</span>
                   {estado.cliente.cuit && <span className="num">· CUIT: {estado.cliente.cuit}</span>}
+                  {estado.cliente.condicion_iva && (
+                    <span className="font-medium text-slate-700">
+                      · {COND_IVA_SHORT[estado.cliente.condicion_iva]}
+                    </span>
+                  )}
                   {estado.cliente.telefono && (
                     <span className="num">· Tel: {estado.cliente.telefono}</span>
                   )}
@@ -460,7 +484,7 @@ export function ClientesView({
                 <th className="w-32 text-right">Entregó (+)</th>
                 <th className="w-32 text-right">Se Aplicó (-)</th>
                 <th className="w-40 text-right">Saldo Cliente</th>
-                <th className="no-print w-24 text-center">Recibo</th>
+                <th className="no-print w-32 text-center">Comprobante</th>
               </tr>
             </thead>
             <tbody>
@@ -505,7 +529,22 @@ export function ClientesView({
                     {m.medio === 'BANCO' ? 'T · Transf.' : 'E · Efectivo'}
                   </td>
                   <td className="text-xs font-semibold text-slate-700">{m.tipo_valor}</td>
-                  <td className="text-xs text-slate-900">{m.detalle}</td>
+                  <td className="text-xs text-slate-900">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span>{m.detalle}</span>
+                      {m.factura_arca && (
+                        <button
+                          type="button"
+                          onClick={() => setFacturaMovId(m.id)}
+                          className="num inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-[#15803D] hover:bg-emerald-100"
+                          title={`CAE ${m.factura_arca.cae} · Ver o descargar Factura ${m.factura_arca.cbte_letra}`}
+                        >
+                          <ShieldCheck className="h-3 w-3" /> FC {m.factura_arca.cbte_letra}{' '}
+                          {m.factura_arca.numero_formateado}
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   <td className="num whitespace-nowrap text-right text-xs font-semibold text-[#15803D]">
                     {m.entrada > 0 ? fmtARS(m.entrada) : '—'}
                   </td>
@@ -535,6 +574,27 @@ export function ClientesView({
                       >
                         <FileText className="h-3 w-3" /> Recibo
                       </button>
+                    ) : m.factura_arca ? (
+                      <button
+                        type="button"
+                        onClick={() => setFacturaMovId(m.id)}
+                        className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-[#15803D] hover:bg-emerald-100"
+                        title="Descargar Factura Electrónica ARCA (PDF) o enviar por WhatsApp"
+                      >
+                        <ShieldCheck className="h-3 w-3" /> Factura
+                      </button>
+                    ) : m.tipo_valor === 'HONORARIOS' &&
+                      m.medio === 'BANCO' &&
+                      m.entrada > 0 &&
+                      !estado?.cliente.es_interno ? (
+                      <button
+                        type="button"
+                        onClick={() => setFacturaMovId(m.id)}
+                        className="inline-flex items-center gap-1 rounded bg-[#0F172A] px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-[#1E3A8A]"
+                        title="Emitir Factura Electrónica en ARCA para esta transferencia"
+                      >
+                        <ShieldCheck className="h-3 w-3 text-emerald-400" /> Facturar ARCA
+                      </button>
                     ) : (
                       <span className="text-xs text-slate-300">—</span>
                     )}
@@ -558,6 +618,27 @@ export function ClientesView({
               );
               onClientesChanged();
             }}
+          />
+        )}
+        {facturaMovId !== null && (
+          <FacturaArcaModal
+            movimientoId={facturaMovId}
+            onClose={() => setFacturaMovId(null)}
+            onFacturaEmitida={() => {
+              void loadEstado();
+            }}
+            onClienteUpdated={() => {
+              void loadEstado();
+              onClientesChanged();
+            }}
+            onGoToConfigArca={
+              onGoToConfigArca
+                ? () => {
+                    setFacturaMovId(null);
+                    onGoToConfigArca();
+                  }
+                : undefined
+            }
           />
         )}
       </div>
@@ -598,14 +679,40 @@ export function ClientesView({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-0.5 block text-xs font-semibold text-slate-700">CUIT</label>
+              <label className="mb-0.5 block text-xs font-semibold text-slate-700">
+                CUIT / DNI
+              </label>
               <input
                 type="text"
                 value={modalCliente.cuit}
                 onChange={(e) => setModalCliente({ ...modalCliente, cuit: e.target.value })}
+                placeholder="20301234567"
                 className="num h-9 w-full rounded border border-slate-300 px-2.5 text-xs"
               />
             </div>
+            <div>
+              <label className="mb-0.5 block text-xs font-semibold text-slate-700">
+                Condición IVA (ARCA)
+              </label>
+              <select
+                value={modalCliente.condicion_iva}
+                onChange={(e) =>
+                  setModalCliente({
+                    ...modalCliente,
+                    condicion_iva: e.target.value as '' | CondicionIvaKey,
+                  })
+                }
+                className="h-9 w-full rounded border border-slate-300 px-2 text-xs"
+              >
+                <option value="">Sin definir</option>
+                <option value="RI">Resp. Inscripto (FC A)</option>
+                <option value="MONOTRIBUTO">Monotributo (FC A)</option>
+                <option value="EXENTO">IVA Exento (FC B)</option>
+                <option value="CF">Consumidor Final (FC B)</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="mb-0.5 block text-xs font-semibold text-slate-700">
                 Teléfono (WhatsApp)
@@ -616,6 +723,18 @@ export function ClientesView({
                 onChange={(e) => setModalCliente({ ...modalCliente, telefono: e.target.value })}
                 placeholder="549381..."
                 className="num h-9 w-full rounded border border-slate-300 px-2.5 text-xs"
+              />
+            </div>
+            <div>
+              <label className="mb-0.5 block text-xs font-semibold text-slate-700">
+                Domicilio Fiscal
+              </label>
+              <input
+                type="text"
+                value={modalCliente.domicilio}
+                onChange={(e) => setModalCliente({ ...modalCliente, domicilio: e.target.value })}
+                placeholder="Opcional"
+                className="h-9 w-full rounded border border-slate-300 px-2.5 text-xs"
               />
             </div>
           </div>
@@ -752,7 +871,15 @@ export function ClientesView({
         <button
           type="button"
           onClick={() =>
-            setModalCliente({ nombre: '', cuit: '', telefono: '', nota_revision: '', aliases: '' })
+            setModalCliente({
+              nombre: '',
+              cuit: '',
+              condicion_iva: '',
+              domicilio: '',
+              telefono: '',
+              nota_revision: '',
+              aliases: '',
+            })
           }
           className="inline-flex h-9 items-center gap-1.5 rounded bg-[#0F172A] px-3 text-xs font-semibold text-white hover:bg-[#1E3A8A]"
         >

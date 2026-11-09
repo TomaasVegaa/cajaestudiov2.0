@@ -8,8 +8,9 @@ function cliente_aliases(int $id): array
 function clientes_list(): array
 {
     require_user();
+    ensure_arca_schema();
     $internos = param('internos', '1') === '1';
-    $sql = "SELECT c.id, c.nombre, c.cuit, c.telefono, c.es_interno, c.nota_revision, c.activo,
+    $sql = "SELECT c.id, c.nombre, c.cuit, c.condicion_iva, c.domicilio, c.telefono, c.es_interno, c.nota_revision, c.activo,
                    GROUP_CONCAT(a.alias SEPARATOR '|') aliases
             FROM clientes c LEFT JOIN clientes_alias a ON a.cliente_id = c.id
             WHERE c.activo = 1" . ($internos ? '' : ' AND c.es_interno = 0') . "
@@ -18,6 +19,8 @@ function clientes_list(): array
         'id' => (int)$r['id'],
         'nombre' => $r['nombre'],
         'cuit' => $r['cuit'],
+        'condicion_iva' => $r['condicion_iva'],
+        'domicilio' => $r['domicilio'],
         'telefono' => $r['telefono'],
         'es_interno' => (bool)$r['es_interno'],
         'nota_revision' => $r['nota_revision'],
@@ -48,24 +51,41 @@ function save_aliases(int $id, $aliases): void
 function clientes_create(): array
 {
     require_user();
+    ensure_arca_schema();
     $b = body();
     $nombre = normalize_name((string)($b['nombre'] ?? ''));
     if ($nombre === '') throw new HttpError('El nombre es obligatorio');
     if (find_cliente_by_name($nombre)) throw new HttpError('Ya existe un cliente (o alias) con ese nombre');
     db()->beginTransaction();
-    q('INSERT INTO clientes (nombre, cuit, telefono, nota_revision) VALUES (?,?,?,?)', [
-        $nombre, $b['cuit'] ?? null, $b['telefono'] ?? null, $b['nota_revision'] ?? null,
+    q('INSERT INTO clientes (nombre, cuit, condicion_iva, domicilio, telefono, nota_revision) VALUES (?,?,?,?,?,?)', [
+        $nombre,
+        $b['cuit'] ?? null,
+        $b['condicion_iva'] ?? null,
+        $b['domicilio'] ?? null,
+        $b['telefono'] ?? null,
+        $b['nota_revision'] ?? null,
     ]);
     $id = (int)db()->lastInsertId();
     save_aliases($id, $b['aliases'] ?? []);
     audit('CREAR', 'clientes', $id, null, $b);
     db()->commit();
-    return ['id' => $id, 'nombre' => $nombre, 'es_interno' => false, 'nota_revision' => $b['nota_revision'] ?? null, 'aliases' => cliente_aliases($id)];
+    return [
+        'id' => $id,
+        'nombre' => $nombre,
+        'cuit' => $b['cuit'] ?? null,
+        'condicion_iva' => $b['condicion_iva'] ?? null,
+        'domicilio' => $b['domicilio'] ?? null,
+        'telefono' => $b['telefono'] ?? null,
+        'es_interno' => false,
+        'nota_revision' => $b['nota_revision'] ?? null,
+        'aliases' => cliente_aliases($id),
+    ];
 }
 
 function clientes_update(int $id): array
 {
     require_user();
+    ensure_arca_schema();
     $b = body();
     $c = q('SELECT * FROM clientes WHERE id = ?', [$id])->fetch();
     if (!$c) throw new HttpError('Cliente inexistente', 404);
@@ -75,9 +95,11 @@ function clientes_update(int $id): array
     if ($owner && $owner !== $id) throw new HttpError('Ya existe otro cliente (o alias) con ese nombre');
     if ($c['es_interno'] && $nombre !== $c['nombre']) throw new HttpError('No se puede renombrar una cuenta interna');
     db()->beginTransaction();
-    q('UPDATE clientes SET nombre = ?, cuit = ?, telefono = ?, nota_revision = ?, activo = ? WHERE id = ?', [
+    q('UPDATE clientes SET nombre = ?, cuit = ?, condicion_iva = ?, domicilio = ?, telefono = ?, nota_revision = ?, activo = ? WHERE id = ?', [
         $nombre,
         array_key_exists('cuit', $b) ? $b['cuit'] : $c['cuit'],
+        array_key_exists('condicion_iva', $b) ? $b['condicion_iva'] : ($c['condicion_iva'] ?? null),
+        array_key_exists('domicilio', $b) ? $b['domicilio'] : ($c['domicilio'] ?? null),
         array_key_exists('telefono', $b) ? $b['telefono'] : $c['telefono'],
         array_key_exists('nota_revision', $b) ? $b['nota_revision'] : $c['nota_revision'],
         isset($b['activo']) ? (int)(bool)$b['activo'] : (int)$c['activo'],
@@ -135,14 +157,20 @@ function clientes_saldos(): array
 function clientes_estado_cuenta(int $id): array
 {
     require_user();
-    $c = q('SELECT id, nombre, cuit, telefono, nota_revision, es_interno FROM clientes WHERE id = ?', [$id])->fetch();
+    ensure_arca_schema();
+    $c = q('SELECT id, nombre, cuit, condicion_iva, domicilio, telefono, nota_revision, es_interno FROM clientes WHERE id = ?', [$id])->fetch();
     if (!$c) throw new HttpError('Cliente inexistente', 404);
     $desde = valid_date(param('desde', date('Y-01-01')));
     $hasta = valid_date(param('hasta', date('Y-m-d')));
     if ($desde > $hasta) throw new HttpError('El rango de fechas es invalido');
 
     $anterior = saldo_cliente($id, $desde, false);
-    $rows = q("SELECT m.*, u.nombre usuario FROM movimientos m LEFT JOIN usuarios u ON u.id = m.creado_por
+    $rows = q("SELECT m.*, u.nombre usuario,
+                      fa.id fa_id, fa.cbte_tipo fa_cbte_tipo, fa.punto_venta fa_punto_venta,
+                      fa.cbte_numero fa_cbte_numero, fa.cae fa_cae, fa.entorno fa_entorno
+               FROM movimientos m
+               LEFT JOIN usuarios u ON u.id = m.creado_por
+               LEFT JOIN facturas_arca fa ON fa.movimiento_id = m.id
                WHERE m.cliente_id = ? AND m.fecha BETWEEN ? AND ? ORDER BY m.fecha, m.id", [$id, $desde, $hasta])->fetchAll();
 
     $saldo = cents($anterior);
@@ -181,8 +209,10 @@ function clientes_estado_cuenta(int $id): array
     }
     return [
         'cliente' => [
-            'id' => (int)$c['id'], 'nombre' => $c['nombre'], 'cuit' => $c['cuit'], 'telefono' => $c['telefono'],
-            'nota_revision' => $c['nota_revision'], 'es_interno' => (bool)$c['es_interno'], 'aliases' => cliente_aliases($id),
+            'id' => (int)$c['id'], 'nombre' => $c['nombre'], 'cuit' => $c['cuit'],
+            'condicion_iva' => $c['condicion_iva'], 'domicilio' => $c['domicilio'],
+            'telefono' => $c['telefono'], 'nota_revision' => $c['nota_revision'],
+            'es_interno' => (bool)$c['es_interno'], 'aliases' => cliente_aliases($id),
         ],
         'desde' => $desde,
         'hasta' => $hasta,

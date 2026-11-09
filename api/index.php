@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/lib/core.php';
 require __DIR__ . '/lib/saldos.php';
+require __DIR__ . '/lib/arca_ws.php';
 foreach (glob(__DIR__ . '/controllers/*.php') as $f) require $f;
 // Cargar la zona horaria antes de resolver fechas por defecto.
 cfg('timezone');
@@ -43,9 +44,16 @@ $routes = [
 
     ['GET', 'movimientos', 'movimientos_list'],
     ['GET', 'movimientos/(\d+)/recibo', 'movimientos_recibo'],
+    ['GET', 'movimientos/(\d+)/factura-prep', 'movimientos_factura_prep'],
+    ['POST', 'movimientos/(\d+)/facturar', 'movimientos_facturar'],
     ['POST', 'movimientos/carga-rapida', 'movimientos_carga_rapida'],
     ['PUT', 'movimientos/(\d+)', 'movimientos_update'],
     ['DELETE', 'movimientos/(\d+)', 'movimientos_delete'],
+
+    ['GET', 'arca/config', 'arca_config_get'],
+    ['POST', 'arca/config', 'arca_config_save'],
+    ['POST', 'arca/generar-csr', 'arca_generar_csr'],
+    ['POST', 'arca/probar', 'arca_probar_conexion'],
 
     ['GET', 'periodos', 'periodos_list'],
     ['POST', 'periodos/cerrar', 'periodos_cerrar'],

@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS clientes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(150) NOT NULL,
     cuit VARCHAR(20) NULL,
+    condicion_iva VARCHAR(30) NULL,
+    domicilio VARCHAR(255) NULL,
     telefono VARCHAR(50) NULL,
     es_interno TINYINT(1) NOT NULL DEFAULT 0,
     nota_revision VARCHAR(255) NULL,
@@ -119,6 +121,71 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     datos_nuevos LONGTEXT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_entidad (entidad, entidad_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Configuracion de Web Service ARCA (ex-AFIP WSAA + WSFEv1)
+CREATE TABLE IF NOT EXISTS arca_config (
+    id TINYINT PRIMARY KEY DEFAULT 1,
+    entorno ENUM('homologacion','produccion') NOT NULL DEFAULT 'homologacion',
+    cuit VARCHAR(11) NOT NULL DEFAULT '',
+    razon_social VARCHAR(180) NOT NULL DEFAULT '',
+    domicilio_comercial VARCHAR(255) NOT NULL DEFAULT '',
+    condicion_iva VARCHAR(60) NOT NULL DEFAULT 'IVA Responsable Inscripto',
+    punto_venta INT NOT NULL DEFAULT 1,
+    ingresos_brutos VARCHAR(60) NOT NULL DEFAULT '',
+    inicio_actividades DATE NULL,
+    cert_pem LONGTEXT NULL,
+    key_pem LONGTEXT NULL,
+    ta_homo_token LONGTEXT NULL,
+    ta_homo_sign LONGTEXT NULL,
+    ta_homo_exp DATETIME NULL,
+    ta_prod_token LONGTEXT NULL,
+    ta_prod_sign LONGTEXT NULL,
+    ta_prod_exp DATETIME NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Comprobantes electronicos emitidos por ARCA (WSFEv1)
+CREATE TABLE IF NOT EXISTS facturas_arca (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    movimiento_id BIGINT NOT NULL UNIQUE,
+    cliente_id INT NOT NULL,
+    entorno ENUM('homologacion','produccion') NOT NULL,
+    cuit_emisor VARCHAR(11) NOT NULL,
+    razon_social_emisor VARCHAR(180) NOT NULL DEFAULT '',
+    domicilio_emisor VARCHAR(255) NOT NULL DEFAULT '',
+    iibb_emisor VARCHAR(60) NOT NULL DEFAULT '',
+    inicio_act_emisor DATE NULL,
+    punto_venta INT NOT NULL,
+    cbte_tipo INT NOT NULL,
+    cbte_numero BIGINT NOT NULL,
+    cbte_fecha DATE NOT NULL,
+    concepto TINYINT NOT NULL DEFAULT 2,
+    fch_serv_desde DATE NOT NULL,
+    fch_serv_hasta DATE NOT NULL,
+    fch_vto_pago DATE NOT NULL,
+    doc_tipo INT NOT NULL,
+    doc_nro VARCHAR(20) NOT NULL,
+    condicion_iva_receptor_id INT NOT NULL,
+    condicion_iva_receptor VARCHAR(60) NOT NULL,
+    receptor_nombre VARCHAR(180) NOT NULL,
+    receptor_domicilio VARCHAR(255) NULL,
+    descripcion VARCHAR(500) NOT NULL,
+    alic_iva_id INT NOT NULL DEFAULT 5,
+    alic_iva_pct DECIMAL(5,2) NOT NULL DEFAULT 21.00,
+    imp_neto DECIMAL(15,2) NOT NULL,
+    imp_iva DECIMAL(15,2) NOT NULL,
+    imp_total DECIMAL(15,2) NOT NULL,
+    cae VARCHAR(20) NOT NULL,
+    cae_vto DATE NOT NULL,
+    qr_url TEXT NOT NULL,
+    observaciones_arca TEXT NULL,
+    creado_por INT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (movimiento_id) REFERENCES movimientos(id) ON DELETE RESTRICT,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+    FOREIGN KEY (creado_por) REFERENCES usuarios(id),
+    INDEX idx_cbte (entorno, punto_venta, cbte_tipo, cbte_numero)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Datos base
